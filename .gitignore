@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+venv/
+.venv/
+.env
+outputs/env
+instance/
+gymflow/gymflow.db
+
+# Keep local secrets, databases and generated data out of the public repository.
+.env.*
+!.env.example
+outputs/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+.pytest_cache/
+.coverage
+htmlcov/

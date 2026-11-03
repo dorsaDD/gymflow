@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.db
+instance/
+.git/
+.venv/
+venv/
+_devtools/__pycache__/

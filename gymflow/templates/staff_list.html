@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Staff — GymFlow{% endblock %}
+{% block content %}
+<div class="detail-header">
+  <h1>Staff accounts</h1>
+  <div class="actions-row">
+    <a class="btn" href="{{ url_for('admin.staff_new', role='trainer') }}">New trainer</a>
+    <a class="btn secondary" href="{{ url_for('admin.staff_new', role='receptionist') }}">New receptionist</a>
+  </div>
+</div>
+<div class="card-panel">
+  <table>
+    <tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>
+    {% for s in staff %}
+    <tr>
+      <td>{{ s.full_name }}</td>
+      <td>{{ s.email }}</td>
+      <td><span class="badge {{ s.role }}">{{ s.role }}</span></td>
+      <td>
+        <form class="inline" method="post" action="{{ url_for('admin.deregister', user_id=s.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn small danger" type="submit">De-register</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">No staff accounts yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

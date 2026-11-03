@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Log in — GymFlow{% endblock %}
+{% block content %}
+<div class="login-shell">
+  <div class="login-brand">
+    <div class="icon-circle">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7v10M4 9v6M20 7v10M22 9v6M8 12h8"/></svg>
+    </div>
+    <h1>GymFlow</h1>
+    <p>Membership cards, class bookings, workout plans and staff tools for a gym or fitness club — one place for members, trainers, receptionists and administrators.</p>
+    <ul>
+      <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Membership cards &amp; revision history</li>
+      <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Class scheduling &amp; bookings</li>
+      <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Workout plans &amp; progress notes</li>
+      <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Role-based access for every staff type</li>
+    </ul>
+  </div>
+  <div class="login-form-panel">
+    <h2>Log in</h2>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" name="email" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" required>
+      </div>
+      <button class="btn" type="submit" style="width:100%; justify-content:center;">Log in</button>
+    </form>
+    <p class="muted" style="margin-top:1rem;">
+      <a href="{{ url_for('auth.password_recovery') }}">Forgot your password?</a>
+      &nbsp;·&nbsp;
+      New member? <a href="{{ url_for('auth.signup') }}">Sign up</a>
+    </p>
+    <div class="info-hint">
+      {{ icon('key', 16) }}
+      <span>First time here? Default administrator account:<br>
+      <code>admin@gymflow.local</code> / <code>Admin123!</code></span>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Werkzeug==3.0.4
+python-dotenv==1.0.1
+scikit-learn==1.7.2
+openai==1.54.4
+# Pinned explicitly: openai==1.54.4's internal HTTP client construction is
+# incompatible with httpx>=0.28 (httpx dropped the `proxies` argument that
+# older openai releases still pass), which raises a bare TypeError the first
+# time the AI assistant actually calls the API -- see ai_agent.py's
+# _call_llm() catch-all. Without this pin, `pip install` silently resolves
+# the newest httpx and breaks the assistant even though Flask etc. all work.
+httpx==0.27.2

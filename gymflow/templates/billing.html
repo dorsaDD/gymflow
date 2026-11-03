@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Billing — {{ card.owner.full_name }} — GymFlow{% endblock %}
+{% block content %}
+<div class="detail-header">
+  <h1>{{ icon('credit-card', 22) }} Billing — {{ card.owner.full_name }}</h1>
+  <div class="actions-row">
+    <a class="btn secondary" href="{{ url_for('members.view_card', card_id=card.id) }}">Back to card</a>
+    {% if can_manage %}
+      <a class="btn secondary" href="{{ url_for('billing.all_invoices') }}">All invoices</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="balance-panel">
+  <div>
+    <div class="balance-panel__label">Outstanding balance</div>
+    <div class="balance-panel__value {{ 'zero' if balance == 0 }}">${{ '%.2f'|format(balance) }}</div>
+  </div>
+</div>
+
+{% if can_manage %}
+<div class="card-panel">
+  <h2>Issue a new invoice</h2>
+  <p class="muted">The nutrition/workout equivalent of assigning a plan — a billing charge against this member's card.</p>
+  <form method="post" action="{{ url_for('billing.issue_invoice', card_id=card.id) }}" class="invoice-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Description
+      <input type="text" name="description" placeholder="e.g. 'September membership fee'" required>
+    </label>
+    <label>Amount ($)
+      <input type="number" name="amount" min="0.01" step="0.01" required>
+    </label>
+    <label>Due date
+      <input type="date" name="due_date">
+    </label>
+    <button class="btn small" type="submit">Issue invoice</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card-panel">
+  <h2>Invoice history</h2>
+  {% if card.invoices %}
+    <table>
+      <tr><th>Description</th><th>Amount</th><th>Status</th><th>Issued</th><th>Due</th><th></th></tr>
+      {% for inv in card.invoices %}
+      <tr>
+        <td>{{ inv.description }}</td>
+        <td>${{ '%.2f'|format(inv.amount) }}{% if inv.discount_amount %}<div class="muted">${{ '%.2f'|format(inv.discount_amount) }} rewards discount</div>{% endif %}{% if inv.status == 'paid' and inv.paid_amount is not none %}<div class="muted">Paid ${{ '%.2f'|format(inv.paid_amount) }}</div>{% endif %}</td>
+        <td>
+          <span class="badge {{ 'success' if inv.status == 'paid' else ('danger' if inv.status == 'refunded' else 'warning') }}">
+            {{ inv.status|capitalize }}
+          </span>
+          {% if inv.status == 'pending' and inv.last_error %}
+            <div class="muted">Last attempt failed: {{ inv.last_error }}</div>
+          {% endif %}
+        </td>
+        <td>{{ inv.issued_at.strftime('%Y-%m-%d') }}</td>
+        <td>{{ inv.due_date.strftime('%Y-%m-%d') if inv.due_date else '—' }}</td>
+        <td>
+          {% if inv.status == 'pending' and can_pay %}
+            <details>
+              <summary class="btn small">Pay now</summary>
+              <form method="post" action="{{ url_for('billing.pay', invoice_id=inv.id) }}" class="pay-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label>Card number
+                  <input type="text" name="card_number" placeholder="4242 4242 4242 4242" maxlength="19" required>
+                </label>
+                <div class="pay-form__row">
+                  <label>Expiry (MM/YY)
+                    <input type="text" name="expiry" placeholder="12/30" maxlength="5" required>
+                  </label>
+                  <label>CVV
+                    <input type="text" name="cvv" placeholder="123" maxlength="4" required>
+                  </label>
+                </div>
+                {% if own_rewards %}
+                  <label>Apply a reserved reward
+                    <select name="reward_redemption_id">
+                      <option value="">No reward</option>
+                      {% for redemption in own_rewards %}
+                        <option value="{{ redemption.id }}">{{ redemption.reward.name }} ({{ redemption.reward.points_cost }} points)</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                {% endif %}
+                <p class="muted">Eligible policy discounts are applied automatically. Invoice discounts are capped at 50% and do not stack.</p>
+                <button class="btn small" type="submit">Pay up to ${{ '%.2f'|format(inv.amount) }}</button>
+              </form>
+              <div class="test-cards-hint">
+                Demo test cards (no real charge is ever made): <code>4242 4242 4242 4242</code> succeeds;
+                <code>4000 0000 0000 0002</code> is always declined. Any future expiry (e.g. <code>12/30</code>)
+                and any 3-digit CVV work.
+              </div>
+            </details>
+          {% elif inv.status in ('paid', 'refunded') %}
+            <div class="actions-row">
+              <a class="btn small secondary" href="{{ url_for('billing.receipt', invoice_id=inv.id) }}">Receipt</a>
+              {% if inv.status == 'paid' and can_manage %}
+                <form class="inline" method="post" action="{{ url_for('billing.refund', invoice_id=inv.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn small danger" type="submit">Refund</button>
+                </form>
+              {% endif %}
+            </div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p class="muted">No invoices yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

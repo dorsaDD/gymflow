@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Receipt #{{ invoice.id }} — GymFlow{% endblock %}
+{% block content %}
+<div class="actions-row">
+  <a class="btn secondary" href="{{ url_for('billing.view_invoices', card_id=card.id) }}">Back to billing</a>
+  <button class="btn" onclick="window.print()" type="button">Print receipt</button>
+</div>
+
+<div class="receipt-card">
+  <div class="receipt-card__top">
+    <div class="receipt-card__brand">{{ icon('dumbbell', 18) }} GymFlow</div>
+    <span class="receipt-stamp {{ 'paid' if invoice.status == 'paid' else 'refunded' }}">{{ invoice.status }}</span>
+  </div>
+  <div class="receipt-card__body">
+    <div class="receipt-row"><span class="receipt-row__label">Receipt #</span><span>{{ invoice.id }}</span></div>
+    <div class="receipt-row"><span class="receipt-row__label">Member</span><span>{{ card.owner.full_name }} ({{ card.member_code }})</span></div>
+    <div class="receipt-row"><span class="receipt-row__label">Description</span><span>{{ invoice.description }}</span></div>
+    <div class="receipt-row"><span class="receipt-row__label">Issued by</span><span>{{ invoice.issued_by.full_name }}</span></div>
+    <div class="receipt-row"><span class="receipt-row__label">Payment method</span><span>Card ending {{ invoice.payment_method_last4 or '—' }}</span></div>
+    <div class="receipt-row"><span class="receipt-row__label">Paid on</span><span>{{ invoice.paid_at.strftime('%Y-%m-%d %H:%M') if invoice.paid_at else '—' }}</span></div>
+    {% if invoice.status == 'refunded' %}
+    <div class="receipt-row">
+      <span class="receipt-row__label">Refunded on</span>
+      <span>{{ invoice.refunded_at.strftime('%Y-%m-%d %H:%M') }} by {{ invoice.refunded_by.full_name }}</span>
+    </div>
+    {% endif %}
+    {% if invoice.discount_amount %}
+      <div class="receipt-row"><span class="receipt-row__label">Discount</span><span>−${{ '%.2f'|format(invoice.discount_amount) }}</span></div>
+    {% endif %}
+    <div class="receipt-total"><span>Amount paid</span><span>${{ '%.2f'|format(invoice.paid_amount if invoice.paid_amount is not none else invoice.amount) }}</span></div>
+  </div>
+</div>
+{% endblock %}

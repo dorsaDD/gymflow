@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Model Insights — GymFlow{% endblock %}
+{% block content %}
+<div class="detail-header">
+  <h1>No-show risk model — insights</h1>
+  <a class="btn secondary" href="{{ url_for('members.dashboard') }}">Back to dashboard</a>
+</div>
+<p class="muted">Section 4.8: how the "no-show risk" number shown on the dashboard and each class roster is actually produced, so it can be checked rather than taken on faith.</p>
+
+<div class="card-panel">
+  <h2>Training data</h2>
+  <p>{{ trained.note }}</p>
+  {% if trained.model is none %}
+    <p class="muted">Needs at least {{ min_samples }} marked bookings (a mix of attended and no-show) before any model or comparison can be trained. Mark attendance on a few classes from a roster page, then reload this page.</p>
+  {% endif %}
+</div>
+
+{% if trained.model is not none %}
+<div class="card-panel">
+  <h2>Features used</h2>
+  <p class="muted">Every prediction is based only on real attendance history already in the database — no invented or external data.</p>
+  <table>
+    <tr><th>Feature</th><th>Meaning</th></tr>
+    <tr><td><code>prior_reliability</code></td><td>Attended-ratio over this member's OTHER marked bookings (0.5 if none yet)</td></tr>
+    <tr><td><code>prior_marked_count</code></td><td>How many other bookings of theirs have been marked at all</td></tr>
+    <tr><td><code>prior_no_show_count</code></td><td>Raw count of prior no-shows (repeat offenders stand out even at a middling ratio)</td></tr>
+    <tr><td><code>tenure_days</code></td><td>How long the member has held an account, at the time of that booking</td></tr>
+  </table>
+</div>
+
+{% if trained.comparison %}
+<div class="card-panel">
+  <h2>Algorithm comparison</h2>
+  <p class="muted">Two different model families are trained on the same 75% split and evaluated on the same held-out 25% — the one with the better F1 score (tie-broken by accuracy) is the one actually used for live predictions on the dashboard and rosters.</p>
+  <table>
+    <tr><th>Algorithm</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th></th></tr>
+    {% for c in trained.comparison %}
+    <tr {% if c.name == trained.model_name %}class="chosen-row"{% endif %}>
+      <td>{{ c.name }}{% if c.name == trained.model_name %} <span class="badge success">chosen</span>{% endif %}</td>
+      <td>{{ (c.accuracy * 100)|round|int }}%</td>
+      <td>{{ (c.precision * 100)|round|int }}%</td>
+      <td>{{ (c.recall * 100)|round|int }}%</td>
+      <td>{{ (c.f1 * 100)|round|int }}%</td>
+      <td></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="muted" style="margin-top:10px;">
+    Precision: of the bookings flagged as likely no-shows, how many actually were. Recall: of the bookings that actually ended in a no-show, how many were caught. F1 balances the two — it's what decides the winner here rather than accuracy alone, since with an uneven mix of attended/no-show rows a model can get high accuracy just by predicting the majority class every time.
+  </p>
+</div>
+{% else %}
+<div class="card-panel">
+  <h2>Algorithm comparison</h2>
+  <p class="muted">Not enough marked bookings yet for a meaningful held-out comparison (currently using Logistic Regression by default). Once there are at least 12 marked bookings, this page will train and compare Logistic Regression against a Random Forest and show both sets of metrics here.</p>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

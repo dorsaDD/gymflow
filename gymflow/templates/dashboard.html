@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Dashboard — GymFlow{% endblock %}
+{% block content %}
+<h1>Welcome, {{ user.name }} <span class="badge {{ user.role }}">{{ user.role }}</span></h1>
+
+{% if user.role == 'member' %}
+  <div class="card-panel">
+    <h2>Your card</h2>
+    {% if card %}
+      <p>Membership code: <strong>{{ card.member_code }}</strong></p>
+      <a class="btn" href="{{ url_for('members.view_card', card_id=card.id) }}">View my card</a>
+    {% else %}
+      <p class="muted">No card on file yet.</p>
+    {% endif %}
+  </div>
+  {% if badges %}
+  <div class="card-panel">
+    <h2>Your achievements</h2>
+    <p class="muted">Computed live from your own bookings and diet diary — keep showing up to unlock the next tier.</p>
+    <div class="achv-grid">
+      {% for b in badges %}
+      <div class="achv-badge {{ 'tier-' + b.tier if b.tier else 'locked' }}">
+        <div class="achv-badge__icon">{{ icon(b.icon, 24) }}</div>
+        <div class="achv-badge__name">{{ b.name }}</div>
+        <div class="achv-badge__desc">{{ b.value }} {{ b.unit }}</div>
+        {% if b.tier %}
+          <div class="achv-badge__tier-label">{{ b.tier }}</div>
+        {% endif %}
+        {% if b.next_target %}
+          <div class="achv-badge__bar"><div class="achv-badge__bar-fill" style="width: {{ b.percent }}%;"></div></div>
+          <div class="achv-badge__desc">{{ b.next_target - b.value }} to next tier</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  <div class="card-panel">
+    <h2>Your upcoming bookings</h2>
+    {% if bookings %}
+      <table>
+        <tr><th>Class</th><th>When</th><th>Room</th><th></th></tr>
+        {% for b in bookings %}
+        <tr>
+          <td>{{ b.fitness_class.name }}</td>
+          <td>{{ b.fitness_class.schedule.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>{{ b.fitness_class.room }}</td>
+          <td>
+            <form class="inline" method="post" action="{{ url_for('classes.cancel', booking_id=b.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn small danger" type="submit">Cancel</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">No upcoming bookings. <a href="{{ url_for('classes.catalog') }}">Browse classes</a>.</p>
+    {% endif %}
+  </div>
+  {% if today_nutrition is defined %}
+  <div class="card-panel">
+    <h2>Today's nutrition</h2>
+    {% set goal = today_nutrition.goal %}
+    <div class="nutrition-summary">
+      <div class="nutrition-stat">
+        <div class="nutrition-stat__label">Calories</div>
+        <div class="nutrition-stat__value">{{ today_nutrition.consumed.calories }}{% if goal %} / {{ goal.daily_calories }}{% endif %}</div>
+        {% if goal and goal.daily_calories %}
+          <div class="progress-bar">
+            <div class="progress-bar__fill {{ 'over' if today_nutrition.percent_of_goal > 100 }}"
+                 style="width: {{ [today_nutrition.percent_of_goal, 100]|min }}%;"></div>
+          </div>
+        {% endif %}
+      </div>
+      <div class="nutrition-stat">
+        <div class="nutrition-stat__label">Burned</div>
+        <div class="nutrition-stat__value">{{ today_nutrition.burned }}</div>
+      </div>
+    </div>
+    <a class="btn small" href="{{ url_for('diet.own_diary') }}">Open diet diary</a>
+  </div>
+  {% endif %}
+  {% if billing_balance is defined %}
+  <div class="card-panel">
+    <h2>Your balance</h2>
+    <div class="balance-panel">
+      <div>
+        <div class="balance-panel__label">Outstanding balance</div>
+        <div class="balance-panel__value {{ 'zero' if billing_balance == 0 }}">${{ '%.2f'|format(billing_balance) }}</div>
+      </div>
+    </div>
+    <a class="btn small" href="{{ url_for('billing.own_invoices') }}">Open billing</a>
+  </div>
+  {% endif %}
+  {% if recommended is defined %}
+  <div class="card-panel">
+    <h2>Recommended for you</h2>
+    <p class="muted">{{ recommended.reason }}</p>
+    {% if recommended.recommendations %}
+      <table>
+        <tr><th>Class</th><th>When</th><th>Room</th><th></th></tr>
+        {% for c in recommended.recommendations %}
+        <tr>
+          <td>{{ c.name }}</td>
+          <td>{{ c.schedule.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>{{ c.room }}</td>
+          <td>
+            <form class="inline" method="post" action="{{ url_for('classes.book', class_id=c.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn small" type="submit">Book</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if waitlist_entries %}
+  <div class="card-panel">
+    <h2>Your waitlist</h2>
+    <table>
+      <tr><th>Class</th><th>When</th><th>Position</th><th></th></tr>
+      {% for entry, position in waitlist_entries %}
+      <tr>
+        <td>{{ entry.fitness_class.name }}</td>
+        <td>{{ entry.fitness_class.schedule.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>#{{ position }}</td>
+        <td>
+          <form class="inline" method="post" action="{{ url_for('classes.leave_waitlist', entry_id=entry.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn small danger" type="submit">Leave</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+{% else %}
+  <div class="grid">
+    <div class="stat">
+      <div class="icon-circle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <div><div class="num">{{ member_count }}</div><div class="label">Members</div></div>
+    </div>
+    <div class="stat">
+      <div class="icon-circle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
+      <div><div class="num">{{ class_count }}</div><div class="label">Upcoming classes</div></div>
+    </div>
+    {% if user.role == 'administrator' %}
+      <div class="stat">
+        <div class="icon-circle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg></div>
+        <div><div class="num">{{ staff_count }}</div><div class="label">Staff accounts</div></div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card-panel">
+    <h2>Upcoming class capacity</h2>
+    {% if upcoming_classes %}
+      <div class="capacity-list">
+        {% for c in upcoming_classes %}
+        {% set filled = c.capacity - c.seats_left() %}
+        {% set pct = (filled / c.capacity * 100) if c.capacity else 0 %}
+        <div class="capacity-row">
+          <div class="cap-label" title="{{ c.name }}">{{ c.name }}</div>
+          <div class="capacity-track" title="{{ filled }} of {{ c.capacity }} seats booked">
+            <div class="capacity-fill {{ 'full' if c.seats_left() == 0 }}" style="width: {{ pct }}%;"></div>
+          </div>
+          <div class="cap-value">{{ filled }} / {{ c.capacity }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No upcoming classes scheduled yet.</p>
+    {% endif %}
+  </div>
+
+  {% if at_risk_members is defined %}
+  <div class="card-panel">
+    <div class="detail-header" style="margin:0;">
+      <h2 style="margin:0;">At-risk members</h2>
+      {% if can('view_model_insights') %}
+        <a class="btn small secondary" href="{{ url_for('classes.model_insights') }}">Model insights</a>
+      {% endif %}
+    </div>
+    <p class="muted">No-show risk model (Section 4.8): {{ risk_note }}</p>
+    {% if at_risk_members %}
+      <table>
+        <tr><th>Member</th><th>Reliability</th><th>Marked / no-shows</th><th>Next booking risk</th></tr>
+        {% for row in at_risk_members %}
+        <tr>
+          <td><a href="{{ url_for('members.view_card', card_id=row.member.card.id) }}">{{ row.member.full_name }}</a></td>
+          <td>
+            <span class="badge {{ 'danger' if row.reliability < 0.5 else ('success' if row.reliability >= 0.8 else '') }}">
+              {{ (row.reliability * 100)|round|int }}%
+            </span>
+          </td>
+          <td>{{ row.marked_count }} / {{ row.no_shows }}</td>
+          <td>
+            {% if row.next_risk is not none %}
+              {{ (row.next_risk * 100)|round|int }}% for '{{ row.next_booking.fitness_class.name }}'
+            {% else %}
+              <span class="muted">no upcoming booking</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">No members have any marked attendance yet.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if nutrition_followup is defined %}
+  <div class="card-panel">
+    <h2>Nutrition follow-up</h2>
+    <p class="muted">Section 4.11: members with a daily goal set, ranked by whoever most needs a check-in -- not logging at all, or consistently off their calorie target over the last 7 days.</p>
+    {% if nutrition_followup %}
+      <table>
+        <tr><th>Member</th><th>Days logged (7d)</th><th>Avg calories</th><th>vs. goal</th></tr>
+        {% for row in nutrition_followup %}
+        <tr>
+          <td><a href="{{ url_for('diet.view_diary', card_id=row.card.id) }}">{{ row.card.owner.full_name }}</a></td>
+          <td>{{ row.adherence.days_logged }} / {{ row.adherence.window_days }}</td>
+          <td>{{ row.adherence.avg_calories if row.adherence.avg_calories is not none else '—' }}</td>
+          <td>
+            {% if row.adherence.avg_vs_goal_pct is not none %}
+              <span class="badge {{ 'danger' if row.deviation and row.deviation > 20 else ('success' if row.deviation is not none and row.deviation <= 10 else '') }}">
+                {{ row.adherence.avg_vs_goal_pct }}%
+              </span>
+            {% else %}
+              <span class="badge warning">not logging</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">No members have a nutrition goal set yet.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if billing_followup is defined %}
+  <div class="card-panel">
+    <h2>Outstanding payments</h2>
+    <p class="muted">Section 4.12: members with an unpaid balance, largest (and overdue) first.</p>
+    {% if billing_followup %}
+      <table>
+        <tr><th>Member</th><th>Balance</th><th></th></tr>
+        {% for row in billing_followup %}
+        <tr>
+          <td><a href="{{ url_for('billing.view_invoices', card_id=row.card.id) }}">{{ row.card.owner.full_name }}</a></td>
+          <td>${{ '%.2f'|format(row.balance) }}</td>
+          <td>{% if row.overdue %}<span class="badge danger">overdue</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">No members have an outstanding balance right now.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="actions-row">
+    <a class="btn" href="{{ url_for('members.list_members') }}">View members</a>
+    <a class="btn secondary" href="{{ url_for('classes.catalog') }}">View classes</a>
+    {% if user.role == 'receptionist' %}
+      <a class="btn secondary" href="{{ url_for('members.register') }}">Register a new member</a>
+    {% endif %}
+    {% if user.role == 'trainer' %}
+      <a class="btn secondary" href="{{ url_for('classes.new_class') }}">Schedule a class</a>
+    {% endif %}
+    {% if user.role == 'administrator' %}
+      <a class="btn secondary" href="{{ url_for('admin.staff_list') }}">Manage staff</a>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

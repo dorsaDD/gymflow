@@ -1,0 +1,7 @@
+# Extends requirements.txt with the production WSGI server used by the
+# Docker image (docker-compose.yml). Not needed for local WSL development
+# or the offline test suite -- gunicorn only runs the app under Docker, so
+# it's kept out of requirements.txt to avoid an unnecessary extra install
+# for everyone who isn't running the Section 4.10 redundancy demo.
+-r requirements.txt
+gunicorn==23.0.0

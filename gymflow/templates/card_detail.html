@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Card {{ card.member_code }} — GymFlow{% endblock %}
+{% block content %}
+<div class="detail-header">
+  <h1>Membership card — {{ card.owner.full_name }}</h1>
+  <div class="actions-row">
+    {% if can('modify_card') %}
+      <a class="btn" href="{{ url_for('members.edit_card', card_id=card.id) }}">Edit card</a>
+    {% endif %}
+    {% if can('view_history') or user.id == card.user_id %}
+      <a class="btn secondary" href="{{ url_for('members.history', card_id=card.id) }}">Revision history</a>
+    {% endif %}
+    {% if can('manage_member_diet') or user.id == card.user_id %}
+      <a class="btn secondary" href="{{ url_for('diet.view_diary', card_id=card.id) }}">{{ icon('apple', 16) }} Diet diary</a>
+    {% endif %}
+    {% if can('manage_billing') or user.id == card.user_id %}
+      <a class="btn secondary" href="{{ url_for('billing.view_invoices', card_id=card.id) }}">{{ icon('credit-card', 16) }} Billing</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="membership-card membership-card--{{ card.card_color or 'sunset' }}">
+  <div class="membership-card__top">
+    <div class="membership-card__brand">{{ icon('dumbbell', 22) }} GymFlow</div>
+    <span class="badge {{ card.owner.role }}">{{ card.owner.role }}</span>
+  </div>
+  <div class="membership-card__body">
+    <div class="membership-card__photo">
+      {% if card.photo_filename %}
+        <img src="{{ url_for('members.view_photo', card_id=card.id) }}" alt="{{ card.owner.full_name }}">
+      {% else %}
+        <span class="membership-card__initials">{{ card.owner.name[0] }}{{ card.owner.surname[0] }}</span>
+      {% endif %}
+    </div>
+    <div class="membership-card__info">
+      <div class="membership-card__name">{{ card.owner.full_name }}</div>
+      <div class="membership-card__meta">Member since {{ card.owner.created_at.strftime('%Y-%m-%d') }}</div>
+      <div class="membership-card__meta">{{ card.owner.email }}</div>
+    </div>
+  </div>
+  <div class="membership-card__barcode-strip">
+    <svg id="member-barcode" aria-label="Barcode for member code {{ card.member_code }}"></svg>
+    <div class="membership-card__code">{{ card.member_code }}</div>
+  </div>
+</div>
+
+{% if can('modify_card') or user.id == card.user_id %}
+<div class="card-panel">
+  <h2>Card color</h2>
+  <p class="muted">Choose a theme for your digital membership card, shown above.</p>
+  <form method="post" action="{{ url_for('members.set_card_color', card_id=card.id) }}" class="color-picker">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% set current = card.card_color or 'sunset' %}
+    {% for preset in card_color_presets %}
+      <button type="submit" name="color" value="{{ preset }}"
+              class="color-swatch color-swatch--{{ preset }} {{ 'selected' if preset == current }}"
+              title="{{ preset|capitalize }}" aria-label="{{ preset|capitalize }}">
+        {{ icon('check', 15) }}
+      </button>
+    {% endfor %}
+  </form>
+</div>
+
+<div class="card-panel">
+  <h2>Profile photo</h2>
+  <p class="muted">Shown on the membership card above. PNG, JPG or WEBP.</p>
+  <form method="post" action="{{ url_for('members.upload_photo', card_id=card.id) }}"
+        enctype="multipart/form-data" class="upload-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" name="photo" accept="image/png,image/jpeg,image/webp" required>
+    <button class="btn small" type="submit">{{ 'Replace photo' if card.photo_filename else 'Upload photo' }}</button>
+  </form>
+  {% if card.photo_filename %}
+    <form method="post" action="{{ url_for('members.delete_photo', card_id=card.id) }}" style="margin-top:0.5rem;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn small danger" type="submit">Remove photo</button>
+    </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card-panel">
+  <h2>Personal data</h2>
+  <table class="kv-table">
+    <tr><th>Member code</th><td>{{ card.member_code }}</td></tr>
+    <tr><th>Name</th><td>{{ card.owner.full_name }}</td></tr>
+    <tr><th>Email</th><td>{{ card.owner.email }}</td></tr>
+    <tr><th>Birthdate</th><td>{{ card.birthdate.strftime('%Y-%m-%d') if card.birthdate else '—' }}</td></tr>
+    <tr><th>Sex</th><td>{{ card.sex or '—' }}</td></tr>
+    <tr><th>Address</th><td>{{ card.address or '—' }}</td></tr>
+    <tr><th>Phone</th><td>{{ card.phone or '—' }}</td></tr>
+  </table>
+  {% if card.locked_by_id %}
+    <p class="muted" style="margin-top:0.75rem;">
+      <span class="badge warning">locked</span>
+      This card is currently being edited by another user.
+    </p>
+  {% endif %}
+</div>
+
+<div class="card-panel">
+  <h2>Attachments</h2>
+  <p class="muted">Use case 3.5.9 — Document upload (medical certificates, ID documents, etc.).</p>
+  {% if card.attachments %}
+    <table>
+      <tr><th>File</th><th>Uploaded by</th><th>Date</th><th></th></tr>
+      {% for a in card.attachments %}
+      <tr>
+        <td>{{ a.original_filename }}</td>
+        <td>{{ a.uploaded_by.full_name }}</td>
+        <td>{{ a.uploaded_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="row-actions">
+          <a class="btn small" href="{{ url_for('members.download_attachment', attachment_id=a.id) }}">Download</a>
+          {% if can('upload_attachment') or user.id == card.user_id %}
+          <form class="inline" method="post" action="{{ url_for('members.delete_attachment', attachment_id=a.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn small danger" type="submit">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p class="muted">No attachments yet.</p>
+  {% endif %}
+
+  {% if can('upload_attachment') %}
+    <form method="post" action="{{ url_for('members.upload_attachment', card_id=card.id) }}"
+          enctype="multipart/form-data" class="upload-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="file" required>
+      <button class="btn small" type="submit">Upload</button>
+    </form>
+  {% endif %}
+</div>
+
+<div class="card-panel">
+  <h2>Progress notes</h2>
+  <p class="muted">Use case 3.5.12 — Progress notes on card.</p>
+  {% if card.notes %}
+    <ul class="note-list">
+      {% for n in card.notes %}
+      <li>
+        <div class="note-meta">{{ n.author.full_name }} — {{ n.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+        <div class="note-text">{{ n.text }}</div>
+        {% if can('remove_any_note') or (can('remove_own_note') and n.author_id == user.id) %}
+        <form class="inline" method="post" action="{{ url_for('members.delete_note', note_id=n.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn small danger" type="submit">Delete</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">No progress notes yet.</p>
+  {% endif %}
+
+  {% if can('add_progress_note') %}
+    <form method="post" action="{{ url_for('members.add_note', card_id=card.id) }}" class="note-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <textarea name="text" rows="3" placeholder="Add a progress note…" required></textarea>
+      <button class="btn small" type="submit">Add note</button>
+    </form>
+  {% endif %}
+</div>
+
+<div class="card-panel">
+  <h2>Workout plans</h2>
+  <p class="muted">Use case 3.5.13 — Workout plan assignment.</p>
+  {% if card.workout_plans %}
+    <ul class="note-list">
+      {% for wp in card.workout_plans %}
+      <li>
+        <div class="note-meta">{{ wp.title }} — assigned by {{ wp.trainer.full_name }} on {{ wp.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+        <div class="note-text">{{ wp.details }}</div>
+        {% if can('remove_any_workout_plan') or (can('remove_own_workout_plan') and wp.trainer_id == user.id) %}
+        <form class="inline" method="post" action="{{ url_for('members.delete_workout_plan', plan_id=wp.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn small danger" type="submit">Delete</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">No workout plans yet.</p>
+  {% endif %}
+
+  {% if can('assign_workout_plan') %}
+    <form method="post" action="{{ url_for('members.add_workout_plan', card_id=card.id) }}" class="note-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="title" placeholder="Plan title (e.g. 'Week 1 — Strength Foundations')" required>
+      <textarea name="details" rows="3" placeholder="Exercises, sets/reps, session schedule…" required></textarea>
+      <button class="btn small" type="submit">Assign plan</button>
+    </form>
+  {% endif %}
+</div>
+
+<!-- Renders the member code as a real, scannable CODE128 barcode client-side
+     (nothing server-side to generate/store an image for). Degrades to just
+     the printed code above if the CDN script fails to load -- see the
+     catch below. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.6/JsBarcode.all.min.js"></script>
+<script>
+  (function () {
+    if (typeof JsBarcode === "undefined") return; // offline/CDN blocked: the printed code is still readable
+    try {
+      JsBarcode("#member-barcode", {{ card.member_code|tojson }}, {
+        format: "CODE128", displayValue: false, height: 40, margin: 0, background: "transparent",
+      });
+    } catch (err) {
+      // Malformed/unsupported code for CODE128 -- fall back silently to the printed text.
+    }
+  })();
+</script>
+{% endblock %}

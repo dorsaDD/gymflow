@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Diet diary — {{ card.owner.full_name }} — GymFlow{% endblock %}
+{% block content %}
+{% set prev_date = summary.date.fromordinal(summary.date.toordinal() - 1) %}
+{% set next_date = summary.date.fromordinal(summary.date.toordinal() + 1) %}
+<div class="detail-header">
+  <h1>{{ icon('apple', 22) }} Diet diary — {{ card.owner.full_name }}</h1>
+  <div class="actions-row">
+    <a class="btn secondary" href="{{ url_for('members.view_card', card_id=card.id) }}">Back to card</a>
+  </div>
+</div>
+
+<div class="date-nav">
+  <a class="btn small secondary" href="{{ url_for('diet.view_diary', card_id=card.id, date=prev_date.isoformat()) }}">&larr; Prev day</a>
+  <form method="get" action="{{ url_for('diet.view_diary', card_id=card.id) }}" class="inline">
+    <input type="date" name="date" value="{{ summary.date.isoformat() }}" onchange="this.form.submit()">
+  </form>
+  <a class="btn small secondary" href="{{ url_for('diet.view_diary', card_id=card.id, date=next_date.isoformat()) }}">Next day &rarr;</a>
+  {% if summary.date.isoformat() != summary.date.today().isoformat() %}
+    <a class="btn small" href="{{ url_for('diet.view_diary', card_id=card.id) }}">Today</a>
+  {% endif %}
+</div>
+
+<div class="card-panel">
+  <h2>Summary — {{ summary.date.strftime('%A, %Y-%m-%d') }}</h2>
+  {% set goal = summary.goal %}
+  <div class="nutrition-summary">
+    <div class="nutrition-stat">
+      <div class="nutrition-stat__label">Calories consumed</div>
+      <div class="nutrition-stat__value">{{ summary.consumed.calories }}{% if goal %} / {{ goal.daily_calories }}{% endif %}</div>
+      {% if goal and goal.daily_calories %}
+        <div class="progress-bar">
+          <div class="progress-bar__fill {{ 'over' if summary.percent_of_goal > 100 }}"
+               style="width: {{ [summary.percent_of_goal, 100]|min }}%;"></div>
+        </div>
+        <div class="muted">{{ summary.percent_of_goal }}% of goal</div>
+      {% endif %}
+    </div>
+    <div class="nutrition-stat">
+      <div class="nutrition-stat__label">Calories burned (exercise)</div>
+      <div class="nutrition-stat__value">{{ summary.burned }}</div>
+    </div>
+    <div class="nutrition-stat">
+      <div class="nutrition-stat__label">Net calories</div>
+      <div class="nutrition-stat__value">{{ summary.net_calories }}</div>
+    </div>
+  </div>
+  {% if goal %}
+    <div class="macro-row">
+      <div>Protein: <strong>{{ summary.consumed.protein_g|round(1) }}g</strong> / {{ goal.protein_g }}g</div>
+      <div>Carbs: <strong>{{ summary.consumed.carbs_g|round(1) }}g</strong> / {{ goal.carbs_g }}g</div>
+      <div>Fat: <strong>{{ summary.consumed.fat_g|round(1) }}g</strong> / {{ goal.fat_g }}g</div>
+    </div>
+  {% else %}
+    <p class="muted">No daily goal set yet — set one below to see progress bars.</p>
+  {% endif %}
+
+  {% if can_manage %}
+    <details class="goal-form-details">
+      <summary class="muted">{{ 'Update' if goal else 'Set a' }} daily goal</summary>
+      <form method="post" action="{{ url_for('diet.set_goal', card_id=card.id) }}" class="goal-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="date" value="{{ summary.date.isoformat() }}">
+        <label>Calories <input type="number" name="daily_calories" min="0" value="{{ goal.daily_calories if goal else '' }}" required></label>
+        <label>Protein (g) <input type="number" name="protein_g" min="0" value="{{ goal.protein_g if goal else '' }}" required></label>
+        <label>Carbs (g) <input type="number" name="carbs_g" min="0" value="{{ goal.carbs_g if goal else '' }}" required></label>
+        <label>Fat (g) <input type="number" name="fat_g" min="0" value="{{ goal.fat_g if goal else '' }}" required></label>
+        <button class="btn small" type="submit">Save goal</button>
+      </form>
+    </details>
+  {% endif %}
+</div>
+
+<div class="card-panel">
+  <h2>Food log</h2>
+  {% if summary.entries %}
+    {% for meal in meal_types %}
+      {% set meal_entries = summary.entries|selectattr('meal', 'equalto', meal)|list %}
+      {% if meal_entries %}
+        <h3 class="meal-heading">{{ meal|capitalize }}</h3>
+        <table>
+          <tr><th>Food</th><th>Calories</th><th>P</th><th>C</th><th>F</th><th></th></tr>
+          {% for e in meal_entries %}
+          <tr>
+            <td>{{ e.food_name }}</td>
+            <td>{{ e.calories }}</td>
+            <td>{{ e.protein_g|round(1) }}g</td>
+            <td>{{ e.carbs_g|round(1) }}g</td>
+            <td>{{ e.fat_g|round(1) }}g</td>
+            <td>
+              {% if can_manage %}
+              <form class="inline" method="post" action="{{ url_for('diet.delete_food', entry_id=e.id, date=summary.date.isoformat()) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn small danger" type="submit">Delete</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      {% endif %}
+    {% endfor %}
+  {% else %}
+    <p class="muted">Nothing logged for this day yet.</p>
+  {% endif %}
+
+  {% if can_manage %}
+    <form method="post" action="{{ url_for('diet.log_food', card_id=card.id) }}" class="diet-log-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="date" value="{{ summary.date.isoformat() }}">
+      <select name="meal" required>
+        {% for meal in meal_types %}<option value="{{ meal }}">{{ meal|capitalize }}</option>{% endfor %}
+      </select>
+      <input type="text" name="food_name" placeholder="Food (e.g. 'Grilled chicken & rice')" required>
+      <input type="number" name="calories" min="0" placeholder="Calories" required>
+      <input type="number" name="protein_g" min="0" step="0.1" placeholder="Protein g">
+      <input type="number" name="carbs_g" min="0" step="0.1" placeholder="Carbs g">
+      <input type="number" name="fat_g" min="0" step="0.1" placeholder="Fat g">
+      <button class="btn small" type="submit">Add</button>
+    </form>
+  {% endif %}
+</div>
+
+<div class="card-panel">
+  <h2>Exercise log</h2>
+  {% if summary.exercises %}
+    <table>
+      <tr><th>Activity</th><th>Duration</th><th>Calories burned</th><th>Notes</th><th></th></tr>
+      {% for x in summary.exercises %}
+      <tr>
+        <td>{{ x.activity }}</td>
+        <td>{{ x.duration_minutes }} min</td>
+        <td>{{ x.calories_burned }}</td>
+        <td>{{ x.notes or '—' }}</td>
+        <td>
+          {% if can_manage %}
+          <form class="inline" method="post" action="{{ url_for('diet.delete_exercise', log_id=x.id, date=summary.date.isoformat()) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn small danger" type="submit">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p class="muted">No exercise logged for this day yet.</p>
+  {% endif %}
+
+  {% if can_manage %}
+    <form method="post" action="{{ url_for('diet.log_exercise', card_id=card.id) }}" class="diet-log-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="date" value="{{ summary.date.isoformat() }}">
+      <input type="text" name="activity" placeholder="Activity (e.g. 'Running')" required>
+      <input type="number" name="duration_minutes" min="0" placeholder="Duration (min)" required>
+      <input type="number" name="calories_burned" min="0" placeholder="Calories burned">
+      <input type="text" name="notes" placeholder="Notes (optional)">
+      <button class="btn small" type="submit">Add</button>
+    </form>
+  {% endif %}
+</div>
+
+<div class="card-panel">
+  <h2>Diet plans</h2>
+  <p class="muted">Nutrition guidance assigned by a trainer, the diet counterpart of a Workout Plan.</p>
+  {% if card.diet_plans %}
+    <ul class="note-list">
+      {% for p in card.diet_plans %}
+      <li>
+        <div class="note-meta">{{ p.title }} — assigned by {{ p.trainer.full_name }} on {{ p.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+        <div class="note-text">{{ p.details }}</div>
+        {% if user.role == 'administrator' or p.trainer_id == user.id %}
+        <form class="inline" method="post" action="{{ url_for('diet.delete_plan', plan_id=p.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn small danger" type="submit">Delete</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">No diet plans yet.</p>
+  {% endif %}
+
+  {% if can_assign_plan %}
+    <form method="post" action="{{ url_for('diet.assign_plan', card_id=card.id) }}" class="note-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="title" placeholder="Plan title (e.g. 'High-protein cut, 4 weeks')" required>
+      <textarea name="details" rows="3" placeholder="Meal structure, calorie/macro targets, foods to favor or avoid…" required></textarea>
+      <button class="btn small" type="submit">Assign plan</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}
