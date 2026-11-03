@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Edit card — GymFlow{% endblock %}
+{% block content %}
+<div class="card-panel" style="max-width:640px;">
+  <div class="page-title"><div class="icon-badge">{{ icon('edit', 18) }}</div><h1>Edit card — {{ card.owner.full_name }}</h1></div>
+  <p class="muted">
+    Use case 3.5.7 — Card modification. This card is now locked for your session
+    (see the CardLock mechanism in Section 3.7.7); other staff will not be able to
+    edit it until you save or cancel.
+  </p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+      <label>Sex</label>
+      <select name="sex">
+        <option value="F" {% if card.sex == 'F' %}selected{% endif %}>Female</option>
+        <option value="M" {% if card.sex == 'M' %}selected{% endif %}>Male</option>
+        <option value="Other" {% if card.sex == 'Other' %}selected{% endif %}>Other</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Address</label><input type="text" name="address" value="{{ card.address or '' }}"></div>
+    <div class="form-group"><label>Phone</label><input type="tel" name="phone" value="{{ card.phone or '' }}"></div>
+    <div class="actions-row">
+      <button class="btn" type="submit">Save changes</button>
+      <form class="inline" method="post" action="{{ url_for('members.cancel_edit', card_id=card.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn secondary" type="submit">Cancel &amp; release lock</button>
+      </form>
+    </div>
+  </form>
+</div>
+{% endblock %}

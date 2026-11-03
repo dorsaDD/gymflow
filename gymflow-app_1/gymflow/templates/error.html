@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Error {{ code }} — GymFlow{% endblock %}
+{% block content %}
+<div class="card-panel" style="max-width:480px; margin: 3rem auto; text-align:center;">
+  <h1>{{ code }}</h1>
+  <p class="muted">{{ message }}</p>
+  <a class="btn" href="{{ url_for('members.dashboard') if session.get('user_id') else url_for('auth.login') }}">Go back</a>
+</div>
+{% endblock %}

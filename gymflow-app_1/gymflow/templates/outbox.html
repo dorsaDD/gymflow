@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Mail Outbox — GymFlow{% endblock %}
+{% block content %}
+<div class="page-title"><div class="icon-badge">{{ icon('inbox', 18) }}</div><h1>Mail Outbox</h1></div>
+<p class="muted">
+  GymFlow has no real SMTP server configured for this demo (see the "Mail Server" node
+  in the deployment diagram, Section 3.8). Every email the system would have sent is
+  recorded here instead, so you can verify notification-driven use cases end to end.
+</p>
+<div class="card-panel">
+  {% if messages %}
+    {% for m in messages %}
+    <div class="mail-item">
+      <div class="mail-meta">
+        <strong>To:</strong> {{ m.to_email }} &middot;
+        <strong>Subject:</strong> {{ m.subject }} &middot;
+        <span class="muted">{{ m.sent_at.strftime('%Y-%m-%d %H:%M') }}</span>
+        {% if m.status == "sent" %}
+          <span class="badge success">Sent</span>
+        {% else %}
+          <span class="badge warning">Queued — delivery failed</span>
+        {% endif %}
+      </div>
+      {% if m.status != "sent" %}
+        <p class="muted" style="margin: 0 0 0.5rem;">
+          {{ m.last_error or "The mail relay could not be reached." }}
+          (Section 4.10: retried automatically, still queued for a manual retry.)
+        </p>
+        <form method="post" action="{{ url_for('outbox.retry', message_id=m.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn secondary small">Retry delivery</button>
+        </form>
+      {% endif %}
+      <pre class="mail-body">{{ m.body }}</pre>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">{{ icon('inbox-empty', 34) }}<p>No emails sent yet.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

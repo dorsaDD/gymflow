@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}New {{ role }} — GymFlow{% endblock %}
+{% block content %}
+<div class="card-panel" style="max-width:520px;">
+  <div class="page-title"><div class="icon-badge">{{ icon('user-plus', 19) }}</div><h1>New {{ role }} account</h1></div>
+  <p class="muted">Use case 3.5.8 — Trainer / Receptionist registration.</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="two-col">
+      <div class="form-group"><label>Name</label><input type="text" name="name" required></div>
+      <div class="form-group"><label>Surname</label><input type="text" name="surname" required></div>
+    </div>
+    <div class="form-group"><label>Email</label><input type="email" name="email" required></div>
+    <button class="btn" type="submit">Create {{ role }} account</button>
+  </form>
+</div>
+{% endblock %}

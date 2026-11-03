@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Rewards — GymFlow{% endblock %}
+{% block content %}
+<div class="detail-header">
+  <div><p class="eyebrow">MEMBER BENEFITS</p><h1>Rewards wallet</h1></div>
+  <a class="btn secondary" href="{{ url_for('members.dashboard') }}">Back to dashboard</a>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card"><span>Spendable points</span><strong>{{ [account.balance, 0]|max }}</strong><small>Points available to redeem</small></div>
+  <div class="stat-card"><span>Lifetime qualifying points</span><strong>{{ account.lifetime_points }}</strong><small>Redemptions do not lower your tier</small></div>
+  <div class="stat-card"><span>Rewards tier</span><strong><span class="tier-chip tier-chip--{{ tier_css }}">{{ (progress.current.name ~ ' Rewards Tier') if progress.current else 'Not yet qualified' }}</span></strong><small>{{ progress.current.benefits if progress.current and progress.current.benefits else 'Tier uses lifetime qualifying points.' }}</small></div>
+</div>
+
+<section class="card-panel">
+  <h2>Progress to next tier</h2>
+  {% if progress.next %}
+    <p>{{ progress.remaining }} more qualifying points to {{ progress.next.name }} Rewards Tier</p>
+    <div class="capacity-track" role="progressbar" aria-label="Progress to next rewards tier" aria-valuenow="{{ progress.percent }}" aria-valuemin="0" aria-valuemax="100"><div class="capacity-fill" style="width: {{ progress.percent }}%"></div></div>
+    <p class="muted">{{ account.lifetime_points }} lifetime points toward {{ progress.next.threshold }}.</p>
+  {% else %}<p>You have reached the highest active rewards tier.</p>{% endif %}
+  <p class="muted">Rewards tiers are separate from Bronze, Silver, and Gold achievement badges.</p>
+</section>
+
+{% if ready %}
+<section class="card-panel">
+  <h2>Ready to use</h2>
+  <ul class="offer-list">
+    {% for item in ready %}
+      <li>{% if item.id not in usable %}<span class="offer-status badge warning">Not available right now</span>{% endif %}<strong>{{ item.reward.name }}</strong>
+        <div class="muted">{% if item.id not in usable %}This reward is paused or outside its dates; it will be usable again if the gym re-activates it. {% endif %}{% if item.reward.target == 'class_booking' %}Pick it in the class list when you book a class.{% else %}Choose it on the Billing page when you pay an invoice.{% endif %}
+        {% if item.policy %}Given by offer: {{ item.policy.name }}.{% endif %}</div></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="card-panel">
+  <h2>Offers for you</h2>
+  <p class="muted">These promotions run automatically. You do not need to do anything except attend, pay, or visit your dashboard.</p>
+  {% if offers %}
+  <ul class="offer-list">
+    {% for offer in offers %}
+      <li>
+        <span class="offer-status badge {{ {'eligible': 'success', 'depends': '', 'not_yet': 'warning', 'used': ''}[offer.status] }}">{{ {'eligible': 'You qualify', 'depends': 'Depends on the class/invoice', 'not_yet': 'Not yet', 'used': 'Already used'}[offer.status] }}</span>
+        <strong>{{ offer.policy.name }}</strong>
+        {% if offer.policy.description %}<div class="muted">{{ offer.policy.description }}</div>{% endif %}
+        <div>{{ offer.when }}{% if offer.conditions %}, if {{ offer.conditions|join(' and ') }}{% endif %}: you {{ offer.outcome }}.</div>
+        {% if offer.policy.ends_at %}<div class="muted">Ends {{ offer.policy.ends_at.strftime('%Y-%m-%d') }}.</div>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">There are no active offers right now.</p>{% endif %}
+</section>
+
+{% if upcoming %}
+<section class="card-panel">
+  <h2>Coming soon</h2>
+  <ul class="offer-list">
+    {% for offer in upcoming %}
+      <li><span class="offer-status badge">Starts {{ offer.policy.starts_at.strftime('%d %b') }}</span>
+        <strong>{{ offer.policy.name }}</strong>
+        {% if offer.policy.description %}<div class="muted">{{ offer.policy.description }}</div>{% endif %}
+        <div>{{ offer.when }}{% if offer.conditions %}, if {{ offer.conditions|join(' and ') }}{% endif %}: you {{ offer.outcome }}.{% if offer.policy.ends_at %} Until {{ offer.policy.ends_at.strftime('%d %b') }}.{% endif %}</div></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="card-panel">
+  <h2>Available rewards</h2>
+  {% if rewards %}
+    <div class="table-wrap"><table><tr><th>Reward</th><th>How it works</th><th>Cost</th><th></th></tr>
+      {% for reward in rewards %}
+      <tr>
+        <td><strong>{{ reward.name }}</strong><div class="muted">{{ reward.description or '' }}</div></td>
+        <td>{% if reward.reward_type == 'percent_discount' %}{{ reward.value|int if reward.value == reward.value|int else reward.value }}% off an invoice{% elif reward.reward_type == 'fixed_discount' %}${{ '%.2f'|format(reward.value) }} off an invoice{% else %}One credit for a class booking{% endif %}<div class="muted">{% if reward.minimum_tier %}Requires {{ reward.minimum_tier }} Rewards Tier. {% endif %}{% if reward.max_per_member %}Limit {{ reward.max_per_member }} per member. {% endif %}{% if reward.max_redemptions %}{{ reward.max_redemptions }} total redemptions. {% endif %}{% if reward.ends_at %}Available until {{ reward.ends_at.strftime('%Y-%m-%d %H:%M') }} UTC.{% endif %}</div></td>
+        <td>{{ reward.points_cost }} points</td>
+        <td><form method="post" action="{{ url_for('loyalty.redeem', reward_id=reward.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn small" type="submit" {% if account.balance < reward.points_cost %}disabled{% endif %}>Redeem</button></form></td>
+      </tr>
+      {% endfor %}
+    </table></div>
+  {% else %}<p class="muted">There are no active rewards right now.</p>{% endif %}
+</section>
+
+<section class="card-panel">
+  <h2>Points and rewards history</h2>
+  {% if history %}
+    <div class="table-wrap"><table><tr><th>Date</th><th>Activity</th><th>Points</th><th>Type</th></tr>
+      {% for row in history %}
+        <tr><td>{{ row.when.strftime('%Y-%m-%d') }}</td><td>{{ row.text }}</td>
+          <td>{% if row.points is none %}—{% else %}<span class="{{ 'points-plus' if row.points > 0 else 'points-minus' }}">{{ '+' if row.points > 0 else '' }}{{ row.points }}</span>{% endif %}</td>
+          <td>{{ row.kind }}</td></tr>
+      {% endfor %}
+    </table></div>
+    {% if history_total > history|length %}<p class="muted">Showing the latest {{ history|length }} of {{ history_total }} entries.</p>{% endif %}
+  {% else %}<p class="muted">Your point activity will appear here after your first qualifying event.</p>{% endif %}
+  <p class="muted">Points are earned after staff-confirmed attendance or a successful payment. Refunds and corrections are recorded as reversals.</p>
+</section>
+{% endblock %}

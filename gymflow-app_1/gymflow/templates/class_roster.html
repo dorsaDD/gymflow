@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Roster — {{ fitness_class.name }} — GymFlow{% endblock %}
+{% block content %}
+<div class="detail-header">
+  <h1>Roster — {{ fitness_class.name }}</h1>
+  <a class="btn secondary" href="{{ url_for('classes.catalog') }}">Back to classes</a>
+</div>
+<p class="muted">{{ fitness_class.schedule.strftime('%Y-%m-%d %H:%M') }} · {{ fitness_class.room }} ·
+  {{ bookings|length }} / {{ fitness_class.capacity }} booked</p>
+
+<div class="card-panel">
+  <h2>Confirmed bookings</h2>
+  <p class="muted">No-show risk (Section 4.8): {{ risk_note }}</p>
+  <table>
+    <tr><th>Member</th><th>Booked on</th><th>No-show risk</th><th>Attendance</th><th></th></tr>
+    {% for b in bookings %}
+    <tr>
+      <td>{{ b.member.full_name }}</td>
+      <td>{{ b.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>
+        {% if b.id in risk_by_booking and risk_by_booking[b.id] is not none %}
+          {% set risk = risk_by_booking[b.id] %}
+          <span class="badge {{ 'danger' if risk >= 0.5 else ('success' if risk < 0.25 else '') }}">
+            {{ (risk * 100)|round|int }}%
+          </span>
+        {% else %}
+          <span class="muted">—</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if b.attended is none %}
+          <span class="badge">not marked</span>
+        {% elif b.attended %}
+          <span class="badge success">attended</span>
+        {% else %}
+          <span class="badge danger">no-show</span>
+        {% endif %}
+      </td>
+      <td>
+        <form class="inline" method="post" action="{{ url_for('classes.mark_attendance', booking_id=b.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="attended" value="1">
+          <button class="btn small" type="submit">Attended</button>
+        </form>
+        <form class="inline" method="post" action="{{ url_for('classes.mark_attendance', booking_id=b.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="attended" value="0">
+          <button class="btn small danger" type="submit">No-show</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">No confirmed bookings for this class.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

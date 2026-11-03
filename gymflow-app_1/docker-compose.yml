@@ -1,0 +1,63 @@
+# Section 4.10 fault tolerance demo: three independent GymFlow instances
+# behind an nginx load balancer, all sharing one SQLite database file (and
+# one uploads folder) through named volumes so any instance can serve any
+# request. See docs/FAULT_TOLERANCE_DEMO.md for exactly how to run and
+# demonstrate this ("kill app2, keep clicking, nothing breaks").
+#
+# Run with:  docker compose up --build
+# Then browse to http://localhost:8080 (NOT :5000 -- that's a single
+# instance directly, bypassing the load balancer).
+#
+# Note on the shared SQLite file: fine for this demo (light, mostly
+# single-user traffic) but not how you'd run three real instances in
+# production -- a real deployment would point GYMFLOW_DATABASE_URL at a
+# proper database server (e.g. Postgres) instead, which needs zero code
+# changes since gymflow/config.py already reads that from the environment.
+x-app-common: &app-common
+  build: .
+  volumes:
+    - gymflow-db:/shared
+    - gymflow-uploads:/app/instance/uploads
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+    interval: 5s
+    timeout: 3s
+    retries: 3
+    start_period: 5s
+
+services:
+  app1:
+    <<: *app-common
+    environment:
+      GYMFLOW_SECRET_KEY: docker-demo-secret-key-must-match-across-instances
+      GYMFLOW_DATABASE_URL: sqlite:////shared/gymflow.db
+      GYMFLOW_INSTANCE_NAME: app1
+
+  app2:
+    <<: *app-common
+    environment:
+      GYMFLOW_SECRET_KEY: docker-demo-secret-key-must-match-across-instances
+      GYMFLOW_DATABASE_URL: sqlite:////shared/gymflow.db
+      GYMFLOW_INSTANCE_NAME: app2
+
+  app3:
+    <<: *app-common
+    environment:
+      GYMFLOW_SECRET_KEY: docker-demo-secret-key-must-match-across-instances
+      GYMFLOW_DATABASE_URL: sqlite:////shared/gymflow.db
+      GYMFLOW_INSTANCE_NAME: app3
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app1
+      - app2
+      - app3
+
+volumes:
+  gymflow-db:
+  gymflow-uploads:

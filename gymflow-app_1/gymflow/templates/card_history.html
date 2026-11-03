@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Revision history — GymFlow{% endblock %}
+{% block content %}
+<div class="page-title"><div class="icon-badge">{{ icon('history', 18) }}</div><h1>Revision history — {{ card.owner.full_name }}</h1></div>
+<p class="muted">Every change made to this card since it was created.</p>
+<div class="card-panel">
+  {% if card.history %}
+    <table>
+      <tr><th>Date</th><th>Changed by</th><th>Field</th><th>Old value</th><th>New value</th></tr>
+      {% for h in card.history %}
+      <tr>
+        <td>{{ h.changed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ h.changed_by.full_name }}</td>
+        <td>{{ h.field }}</td>
+        <td>{{ h.old_value or '—' }}</td>
+        <td>{{ h.new_value or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <div class="empty-state">{{ icon('history', 32) }}<p>No changes recorded yet.</p></div>
+  {% endif %}
+</div>
+<div class="actions-row">
+  <a class="btn secondary" href="{{ url_for('members.view_card', card_id=card.id) }}">Back to card</a>
+</div>
+{% endblock %}

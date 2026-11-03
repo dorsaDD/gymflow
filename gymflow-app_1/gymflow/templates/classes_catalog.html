@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Classes — GymFlow{% endblock %}
+{% block content %}
+<div class="detail-header">
+  <h1>Fitness classes</h1>
+  {% if can('manage_classes') %}
+    <a class="btn" href="{{ url_for('classes.new_class') }}">Schedule a class</a>
+  {% endif %}
+</div>
+<div class="card-panel">
+  <table>
+    <tr><th>Class</th><th>Trainer</th><th>When</th><th>Room</th><th>Seats left</th><th></th></tr>
+    {% for c in classes %}
+    <tr>
+      <td>{{ c.name }}<div class="muted">{{ (c.category or 'general')|capitalize }}</div></td>
+      <td>{{ c.trainer.full_name }}</td>
+      <td>{{ c.schedule.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>{{ c.room }}</td>
+      <td>
+        {% set filled = c.capacity - c.seats_left() %}
+        {% set pct = (filled / c.capacity * 100) if c.capacity else 0 %}
+        <div class="mini-capacity" title="{{ filled }} of {{ c.capacity }} seats booked">
+          <div class="capacity-track"><div class="capacity-fill {{ 'full' if c.seats_left() == 0 }}" style="width: {{ pct }}%;"></div></div>
+          <span class="cap-value">{{ c.seats_left() }} / {{ c.capacity }}</span>
+        </div>
+      </td>
+      <td>
+        {% if can('book_class') %}
+          {% if c.id in my_booking_class_ids %}
+            <span class="badge success">booked</span>
+          {% elif c.check_availability() %}
+            <form class="inline" method="post" action="{{ url_for('classes.book', class_id=c.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              {% if free_class_rewards %}
+                <label class="muted" for="class-reward-{{ c.id }}">Optional class credit</label>
+                <select name="reward_redemption_id" id="class-reward-{{ c.id }}">
+                  <option value="">Book normally</option>
+                  {% for redemption in free_class_rewards %}
+                    <option value="{{ redemption.id }}">{{ redemption.reward.name }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+              <button class="btn small" type="submit">Book</button>
+            </form>
+          {% elif c.id in my_waitlist_positions %}
+            <span class="badge">waitlist #{{ my_waitlist_positions[c.id][1] }}</span>
+            <form class="inline" method="post" action="{{ url_for('classes.leave_waitlist', entry_id=my_waitlist_positions[c.id][0]) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn small secondary" type="submit">Leave</button>
+            </form>
+          {% else %}
+            <span class="badge danger">full</span>
+            <form class="inline" method="post" action="{{ url_for('classes.join_waitlist', class_id=c.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn small secondary" type="submit">Join waitlist</button>
+            </form>
+          {% endif %}
+        {% endif %}
+        {% if can('mark_attendance') %}
+          <a class="btn small secondary" href="{{ url_for('classes.roster', class_id=c.id) }}">Roster</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted">No upcoming classes scheduled.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
