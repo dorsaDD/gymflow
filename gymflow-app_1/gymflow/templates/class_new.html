@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Schedule a class — GymFlow{% endblock %}
+{% block content %}
+<div class="card-panel" style="max-width:560px;">
+  <div class="page-title"><div class="icon-badge">{{ icon('calendar-plus', 19) }}</div><h1>Schedule a new class</h1></div>
+  <p class="muted">Use case 3.5.11 (trainer side) — Class booking / catalog management.</p>
+  <form method="post" id="new-class-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label>Class name</label><input type="text" name="name" required></div>
+    <div class="two-col">
+      <div class="form-group"><label>Date &amp; time</label><input type="datetime-local" name="schedule" id="schedule-input" required></div>
+      <div class="form-group"><label>Room</label><input type="text" name="room" id="room-input" required></div>
+    </div>
+    <div class="two-col">
+      <div class="form-group"><label>Capacity</label><input type="number" name="capacity" min="1" value="12" required></div>
+      <div class="form-group"><label for="category-input">Category</label><select name="category" id="category-input">{% for cat in CLASS_CATEGORIES %}<option value="{{ cat }}">{{ cat|capitalize }}</option>{% endfor %}</select></div>
+    </div>
+
+    <div class="form-group">
+      <button type="button" class="btn secondary small" id="suggest-btn">Suggest good times for this room</button>
+      <p class="muted" style="margin:6px 0 0;">Checks your own schedule and this room for conflicts, then ranks free slots by how well-attended that same day/hour has historically been.</p>
+      <div id="suggestions" style="margin-top:10px;"></div>
+    </div>
+
+    <button class="btn" type="submit">Create class</button>
+  </form>
+</div>
+<script>
+(function () {
+  const suggestBtn = document.getElementById("suggest-btn");
+  const roomInput = document.getElementById("room-input");
+  const scheduleInput = document.getElementById("schedule-input");
+  const box = document.getElementById("suggestions");
+
+  suggestBtn.addEventListener("click", async function () {
+    const room = roomInput.value.trim();
+    if (!room) {
+      box.innerHTML = '<p class="muted">Type a room first, so conflicts can be checked against it.</p>';
+      return;
+    }
+    box.innerHTML = '<p class="muted">Checking your schedule and this room…</p>';
+    try {
+      const res = await fetch("{{ url_for('classes.suggest_slots') }}?room=" + encodeURIComponent(room));
+      const data = await res.json();
+      if (!data.slots || !data.slots.length) {
+        box.innerHTML = '<p class="muted">No conflict-free slot found in the next two weeks for this room. Try a different room.</p>';
+        return;
+      }
+      box.innerHTML = "";
+      const list = document.createElement("div");
+      list.className = "capacity-list";
+      data.slots.forEach(function (slot) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "btn small secondary";
+        row.style.display = "block";
+        row.style.width = "100%";
+        row.style.textAlign = "left";
+        row.style.marginBottom = "6px";
+        const demand = slot.has_history ? (slot.score + "% historical fill") : "no history yet for this time";
+        row.textContent = slot.label + " — " + demand;
+        row.addEventListener("click", function () {
+          scheduleInput.value = slot.value;
+        });
+        list.appendChild(row);
+      });
+      box.appendChild(list);
+    } catch (err) {
+      box.innerHTML = '<p class="muted">Could not fetch suggestions right now.</p>';
+    }
+  });
+})();
+</script>
+{% endblock %}

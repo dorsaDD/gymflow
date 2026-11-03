@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Pricing and Rewards Policies — GymFlow{% endblock %}
+{% block content %}
+<div class="detail-header"><div><p class="eyebrow">ADMINISTRATION</p><h1>Pricing, loyalty &amp; incentives</h1><p class="muted">Create offers from supported rule data. Saving a new rule does not require application code changes.</p></div></div>
+
+<section class="card-panel">
+  <h2>Programme overview <span class="muted" style="font-size:.9rem;font-weight:400">(last {{ overview.days }} days)</span></h2>
+  <div class="kpi-grid">
+    {% for name, count in overview.members_per_tier.items() %}
+      <div class="kpi"><span class="muted">{{ name }} members</span><strong>{{ count }}</strong></div>
+    {% endfor %}
+    <div class="kpi"><span class="muted">Points earned</span><strong>{{ overview.points_earned }}</strong></div>
+    <div class="kpi"><span class="muted">Points redeemed</span><strong>{{ overview.points_redeemed }}</strong></div>
+    <div class="kpi"><span class="muted">Offer discounts given</span><strong>${{ '%.2f'|format(overview.discounts_total) }}</strong></div>
+    <div class="kpi"><span class="muted">Rewards waiting to be used</span><strong>{{ overview.rewards_ready }}</strong></div>
+  </div>
+  {% if overview.top_policies %}<p class="muted">Most used offers: {% for policy, count in overview.top_policies %}{{ policy.name }} ({{ count }}×){{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+</section>
+
+<section class="card-panel">
+  <h2>Rewards tiers</h2>
+  <p class="muted">Tiers use lifetime qualifying points. These are rewards tiers, separate from achievement badges. Renaming a tier also updates the offers and rewards that use its name.</p>
+  <div class="table-wrap"><table><tr><th>Tier</th><th>Threshold</th><th>Benefits</th><th>Active</th><th></th></tr>
+    {% for tier in tiers %}
+    {% set tier_form = 'tier-form-' ~ tier.id %}
+    <tr>
+      <td><form id="{{ tier_form }}" method="post" action="{{ url_for('admin_loyalty.save_tier') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="tier_id" value="{{ tier.id }}"></form><input form="{{ tier_form }}" aria-label="Tier name" name="name" maxlength="40" value="{{ tier.name }}" required></td>
+      <td><input form="{{ tier_form }}" aria-label="Lifetime point threshold" type="number" name="threshold" min="0" value="{{ tier.threshold }}" required></td><td><input form="{{ tier_form }}" aria-label="Tier benefits" name="benefits" value="{{ tier.benefits or '' }}"></td><td><select form="{{ tier_form }}" aria-label="Tier active" name="active"><option value="1" {{ 'selected' if tier.active }}>Active</option><option value="0" {{ 'selected' if not tier.active }}>Inactive</option></select></td><td><button form="{{ tier_form }}" class="btn small" type="submit">Save</button></td>
+    </tr>
+    {% endfor %}
+    <tr>
+      <td><form id="tier-form-new" method="post" action="{{ url_for('admin_loyalty.save_tier') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="active" value="1"></form><input form="tier-form-new" aria-label="New tier name" name="name" placeholder="e.g. Platinum" maxlength="40" required></td><td><input form="tier-form-new" aria-label="New tier threshold" type="number" min="0" name="threshold" required></td><td><input form="tier-form-new" aria-label="New tier benefits" name="benefits"></td><td>Active</td><td><button form="tier-form-new" class="btn small" type="submit">Add tier</button></td>
+    </tr>
+  </table></div>
+</section>
+
+<section class="card-panel">
+  <h2>Offers &amp; policies</h2>
+  <p>Write each offer as a short rule. Example: <code>WHEN member.tier == "Gold" THEN grant_reward(3)</code>. Rules are checked against a fixed list of facts and actions (see <a href="#policy-help">rule reference</a>); they are never run as code.</p>
+  {% for policy in policies %}
+  {% set rule = rules[policy.id] %}
+  <details class="card-panel" id="policy-{{ policy.id }}" style="margin-top:1rem">
+    <summary><strong>{{ policy.name }}</strong> <span class="badge {{ 'success' if policy.status == 'active' else ('warning' if policy.status == 'paused' else '') }}">{{ policy.status }}</span> <span class="muted">{{ policy.event_type }} · priority {{ policy.priority }} · used {{ rule.uses }}×{% if policy.max_uses_per_member %} · max {{ policy.max_uses_per_member }}/member{% endif %}{% if policy.max_uses_total %} · max {{ policy.max_uses_total }} total{% endif %}</span>
+      <div class="muted">{{ rule.summary }}</div></summary>
+    <form method="post" action="{{ url_for('admin_loyalty.save_policy') }}" class="invoice-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="policy_id" value="{{ policy.id }}">
+      <label>Name<input name="name" maxlength="100" value="{{ policy.name }}" required></label>
+      <label>Description (shown to members)<input name="description" maxlength="300" value="{{ policy.description or '' }}"></label>
+      {% set current_event = policy.event_type %}{% set current_rule = rule.text %}
+      <label>Trigger event<select name="event_type">{% for key, label in event_labels.items() %}<option value="{{ key }}" {{ 'selected' if current_event == key }}>{{ key }} — {{ label }}</option>{% endfor %}</select></label>
+      <label>Rule <span class="muted">(readable WHEN … THEN … format, or JSON)</span><textarea name="definition" rows="6" class="rule-text" required>{{ current_rule }}</textarea></label>
+      <div class="pay-form__row"><label>Starts at (UTC)<input type="datetime-local" name="starts_at" value="{{ policy.starts_at.strftime('%Y-%m-%dT%H:%M') if policy.starts_at else '' }}"></label><label>Ends at (UTC)<input type="datetime-local" name="ends_at" value="{{ policy.ends_at.strftime('%Y-%m-%dT%H:%M') if policy.ends_at else '' }}"></label></div>
+      <div class="pay-form__row"><label>Maximum uses per member<input type="number" min="1" name="max_uses_per_member" value="{{ policy.max_uses_per_member or '' }}"></label><label>Maximum total uses<input type="number" min="1" name="max_uses_total" value="{{ policy.max_uses_total or '' }}"></label><label>Priority (lower runs first)<input type="number" name="priority" value="{{ policy.priority }}"></label></div>
+      <label>Status<select name="status"><option value="draft" {{ 'selected' if policy.status == 'draft' }}>Draft</option><option value="active" {{ 'selected' if policy.status == 'active' }}>Active</option><option value="paused" {{ 'selected' if policy.status == 'paused' }}>Paused</option><option value="expired" {{ 'selected' if policy.status == 'expired' }}>Expired</option></select></label>
+      <button class="btn small" type="submit">Save policy</button>
+    </form>
+    {% if policy.status != 'active' and policy.status != 'expired' %}<form method="post" action="{{ url_for('admin_loyalty.change_status', policy_id=policy.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="active"><button class="btn small">Activate</button></form>{% endif %}
+    {% if policy.status == 'active' %}<form method="post" action="{{ url_for('admin_loyalty.change_status', policy_id=policy.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="paused"><button class="btn small secondary">Pause</button></form>{% endif %}
+    {% if policy.status != 'expired' %}<form method="post" action="{{ url_for('admin_loyalty.change_status', policy_id=policy.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="expired"><button class="btn small secondary">Expire</button></form>{% endif %}
+    <form method="post" action="{{ url_for('admin_loyalty.preview', policy_id=policy.id) }}" class="invoice-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><h3>Test this policy</h3>
+      <label>Member<select name="member_id" required>{% for member in members %}<option value="{{ member.id }}">{{ member.full_name }}</option>{% endfor %}</select></label>
+      {% if policy.event_type == 'invoice_paid' %}
+        <div class="pay-form__row"><label>Sample invoice amount<input type="number" step="0.01" min="0" name="invoice_amount" value="50"></label>
+        <label>Sample invoice type<select name="invoice_category">{% for cat in INVOICE_CATEGORIES %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}</select></label></div>
+      {% elif policy.event_type == 'class_attended' %}
+        <label>Sample class category<select name="class_category">{% for cat in CLASS_CATEGORIES %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}</select></label>
+      {% endif %}
+      <button class="btn small secondary" type="submit">Preview match</button>
+    </form>
+  </details>
+  {% else %}<p class="muted">No policies created yet.</p>{% endfor %}
+
+  <details class="card-panel" open style="margin-top:1rem"><summary><strong>Create a new offer</strong></summary>
+    <form method="post" action="{{ url_for('admin_loyalty.save_policy') }}" class="invoice-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Name<input name="name" maxlength="100" placeholder="e.g. Gold members: 20 points per yoga class" required></label>
+      <label>Description (shown to members)<input name="description" maxlength="300"></label>
+      {% set current_event = 'class_attended' %}
+      <label>Trigger event<select name="event_type">{% for key, label in event_labels.items() %}<option value="{{ key }}" {{ 'selected' if current_event == key }}>{{ key }} — {{ label }}</option>{% endfor %}</select></label>
+      <label>Rule <span class="muted">(readable WHEN … THEN … format, or JSON)</span><textarea name="definition" rows="6" class="rule-text" required>WHEN member.tier == "Gold"
+AND class.category == "yoga"
+THEN award_points(20)</textarea></label>
+      <div class="pay-form__row"><label>Starts at (UTC)<input type="datetime-local" name="starts_at"></label><label>Ends at (UTC)<input type="datetime-local" name="ends_at"></label></div>
+      <div class="pay-form__row"><label>Maximum uses per member<input type="number" min="1" name="max_uses_per_member"></label><label>Maximum total uses<input type="number" min="1" name="max_uses_total"></label><label>Priority (lower first)<input type="number" name="priority" value="100"></label></div>
+      <label>Status<select name="status"><option value="draft">Draft (test it first)</option><option value="active">Active</option></select></label>
+      <button class="btn" type="submit">Save policy</button>
+    </form>
+  </details>
+</section>
+
+<section class="card-panel">
+  <h2>Rewards</h2>
+  {% if rewards %}<div class="table-wrap"><table><tr><th>Reward (ID for grant_reward)</th><th>Type</th><th>Point cost</th><th>Status</th><th></th></tr>{% for reward in rewards %}<tr><td>{{ reward.name }} <strong>#{{ reward.id }}</strong>{% if reward.minimum_tier %}<div class="muted">{{ reward.minimum_tier }} Rewards Tier and above</div>{% endif %}</td><td>{{ reward.reward_type }}</td><td>{{ reward.points_cost }}</td><td>{{ 'Active' if reward.active else 'Paused' }}</td><td><details><summary>Edit</summary><form method="post" action="{{ url_for('admin_loyalty.save_reward') }}" class="invoice-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="reward_id" value="{{ reward.id }}"><label>Name<input name="name" value="{{ reward.name }}" required></label><label>Description<input name="description" value="{{ reward.description or '' }}"></label><label>Type<select name="reward_type"><option value="percent_discount" {{ 'selected' if reward.reward_type == 'percent_discount' }}>Percent discount</option><option value="fixed_discount" {{ 'selected' if reward.reward_type == 'fixed_discount' }}>Fixed invoice discount</option><option value="free_class" {{ 'selected' if reward.reward_type == 'free_class' }}>Free class credit</option></select></label><label>Point cost<input type="number" name="points_cost" min="1" value="{{ reward.points_cost }}" required></label><label>Discount value<input type="number" step="0.01" name="value" value="{{ reward.value or '' }}"></label><label>Target<select name="target"><option value="invoice" {{ 'selected' if reward.target == 'invoice' }}>Invoice payment</option><option value="class_booking" {{ 'selected' if reward.target == 'class_booking' }}>Class booking</option></select></label><label>Minimum rewards tier<select name="minimum_tier"><option value="">Any tier</option>{% for tier in tiers if tier.active %}<option value="{{ tier.name }}" {{ 'selected' if reward.minimum_tier == tier.name }}>{{ tier.name }} Rewards Tier</option>{% endfor %}</select></label><label>Maximum total redemptions<input type="number" min="1" name="max_redemptions" value="{{ reward.max_redemptions or '' }}"></label><label>Maximum redemptions per member<input type="number" min="1" name="max_per_member" value="{{ reward.max_per_member or '' }}"></label><label>Availability<select name="active"><option value="1" {{ 'selected' if reward.active }}>Active</option><option value="0" {{ 'selected' if not reward.active }}>Paused</option></select></label><label>Starts at (UTC)<input type="datetime-local" name="starts_at" value="{{ reward.starts_at.strftime('%Y-%m-%dT%H:%M') if reward.starts_at else '' }}"></label><label>Ends at (UTC)<input type="datetime-local" name="ends_at" value="{{ reward.ends_at.strftime('%Y-%m-%dT%H:%M') if reward.ends_at else '' }}"></label><button class="btn small" type="submit">Save reward</button></form></details></td></tr>{% endfor %}</table></div>{% else %}<p class="muted">No rewards yet.</p>{% endif %}
+  <details><summary><strong>Create a reward</strong></summary><form method="post" action="{{ url_for('admin_loyalty.save_reward') }}" class="invoice-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Name<input name="name" required></label><label>Description<input name="description"></label><label>Type<select name="reward_type"><option value="percent_discount">Percent invoice discount</option><option value="fixed_discount">Fixed invoice discount</option><option value="free_class">Free class credit</option></select></label><label>Point cost<input type="number" min="1" name="points_cost" required></label><label>Discount value<input type="number" min="0.01" step="0.01" name="value"></label><label>Target<select name="target"><option value="invoice">Invoice payment</option><option value="class_booking">Class booking</option></select></label><label>Minimum rewards tier<select name="minimum_tier"><option value="">Any tier</option>{% for tier in tiers if tier.active %}<option value="{{ tier.name }}">{{ tier.name }} Rewards Tier</option>{% endfor %}</select></label><label>Maximum total redemptions (blank = unlimited)<input type="number" min="1" name="max_redemptions"></label><label>Maximum redemptions per member (blank = unlimited)<input type="number" min="1" name="max_per_member"></label><label>Availability<select name="active"><option value="1">Active</option><option value="0">Paused</option></select></label><label>Starts at (UTC)<input type="datetime-local" name="starts_at"></label><label>Ends at (UTC)<input type="datetime-local" name="ends_at"></label><button class="btn" type="submit">Create reward</button></form></details>
+</section>
+
+<section class="card-panel" id="policy-help">
+  <h2>Rule reference</h2>
+  <p>Format: <code>WHEN &lt;condition&gt; AND &lt;condition&gt; … THEN &lt;action&gt;</code>. Put OR choices in brackets: <code>(class.category == "yoga" OR class.category == "mobility")</code>. A rule with no conditions is just <code>THEN award_points(10)</code>. The first line <code>WHEN event == "…"</code> is optional and must match the trigger you pick.</p>
+  <div class="table-wrap"><table><tr><th>Fact</th><th>Meaning</th><th>Type</th><th>Available for</th></tr>
+    {% for fact, kind in fact_types.items() %}<tr><td><code>{{ fact }}</code></td><td>{{ fact_labels[fact] }}{% if fact in fact_choices %}<div class="muted">One of: {{ fact_choices[fact]|sort|join(', ') }}</div>{% elif fact == 'member.tier' %}<div class="muted">A tier name, e.g. {% for tier in tiers %}"{{ tier.name }}"{{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}</td><td>{{ kind }}</td><td>{{ fact_events[fact]|join(', ') if fact in fact_events else 'all triggers' }}</td></tr>{% endfor %}
+  </table></div>
+  <p>Comparisons: <code>==</code> <code>!=</code> <code>&gt;</code> <code>&gt;=</code> <code>&lt;</code> <code>&lt;=</code> <code>IN [ … ]</code>. Text values go in quotes.</p>
+  <p>Actions: <code>award_points(10)</code> · <code>apply_discount(percent=5)</code> · <code>apply_discount(amount=10, target="membership")</code> · <code>grant_reward(3)</code> (reward ID from the Rewards table, e.g. a free class credit). Discounts only work with the <code>invoice_paid</code> trigger and are capped at 50% of the invoice.</p>
+  <h3>Examples</h3>
+<pre class="rule-text">10 points for every attended class (trigger: class_attended)
+THEN award_points(10)
+
+50 bonus points at 8 classes in one month (trigger: class_attended, max 1 per member if you want it once)
+WHEN member.attended_classes_month == 8 THEN award_points(50)
+
+Discount on a second purchase within 30 days (trigger: invoice_paid)
+WHEN member.purchase_count == 1 AND member.days_since_first_purchase <= 30
+THEN apply_discount(percent=5)
+
+Free class for ages 45–60, once per member (trigger: class_attended, max uses per member = 1)
+WHEN member.age >= 45 AND member.age <= 60 THEN grant_reward(3)
+
+Loyalty bonus after 1 year (trigger: member_activity, max uses per member = 1)
+WHEN member.active_days >= 365 THEN award_points(100)
+
+Gold members: 10% off membership renewals (trigger: invoice_paid)
+WHEN member.tier == "Gold" THEN apply_discount(percent=10, target="membership")
+
+Gold members: one free class every month (trigger: member_activity — checked once per month)
+WHEN member.tier == "Gold" THEN grant_reward(3)</pre>
+  <p class="muted">How conflicts work: points from every matching rule are added; only one discount applies to an invoice — the matching discount policy with the lowest priority number wins, and a member's own reserved reward is used only if no automatic discount applies. Location data and membership plans beyond invoice type are not stored by GymFlow, so there are no location facts.</p>
+</section>
+
+<section class="card-panel"><h2>Administrator point adjustment</h2><p class="muted">Manual corrections change spendable balance, not lifetime qualifying points or tier. Every adjustment is recorded in the member ledger.</p><form method="post" action="{{ url_for('admin_loyalty.adjust_points') }}" class="invoice-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Member<select name="member_id" required>{% for member in members %}<option value="{{ member.id }}">{{ member.full_name }} ({{ member.email }})</option>{% endfor %}</select></label><label>Signed points (positive or negative)<input type="number" name="delta" min="-100000" max="100000" required></label><label>Reason<input name="reason" maxlength="240" required></label><button class="btn" type="submit">Record adjustment</button></form></section>
+
+<section class="card-panel"><h2>Policy change history</h2>{% if audits %}<div class="table-wrap"><table><tr><th>Date</th><th>Policy</th><th>Change</th><th>Admin</th></tr>{% for audit in audits %}<tr><td>{{ audit.created_at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ audit.policy.name }}</td><td>{{ audit.action }}</td><td>{{ audit.changed_by.full_name }}</td></tr>{% endfor %}</table></div>{% else %}<p class="muted">No policy changes recorded yet.</p>{% endif %}</section>
+{% endblock %}

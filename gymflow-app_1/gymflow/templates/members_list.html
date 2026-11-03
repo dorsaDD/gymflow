@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Members — GymFlow{% endblock %}
+{% block content %}
+<h1>Members</h1>
+{% if session.get('role') == 'receptionist' %}
+  <div class="actions-row"><a class="btn" href="{{ url_for('members.register') }}">Register new member</a></div>
+{% endif %}
+<div class="card-panel">
+  <div class="table-wrap"><table>
+    <tr><th>Code</th><th>Name</th><th>Rewards tier</th><th>Email</th><th>Phone</th><th></th></tr>
+    {% for card in cards %}
+    <tr>
+      <td>{{ card.member_code }}</td>
+      <td>{{ card.owner.full_name }}</td>
+      <td>{% if tiers[card.id][0] %}<span class="tier-chip tier-chip--{{ tiers[card.id][1] }}">{{ tiers[card.id][0] }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{{ card.owner.email }}</td>
+      <td>{{ card.phone }}</td>
+      <td><a class="btn small" href="{{ url_for('members.view_card', card_id=card.id) }}">Open</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted">No members registered yet.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endblock %}

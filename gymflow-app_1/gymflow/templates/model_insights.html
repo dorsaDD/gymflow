@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}ML Insights — GymFlow{% endblock %}
+{% block content %}
+<div class="detail-header">
+  <div><p class="eyebrow">MACHINE LEARNING</p><h1>No-show risk model</h1></div>
+  <div class="actions-row">
+    <a class="btn secondary" href="{{ url_for('classes.member_segments') }}">Member segments (K-Means)</a>
+    <a class="btn secondary" href="{{ url_for('members.dashboard') }}">Back to dashboard</a>
+  </div>
+</div>
+<p class="muted">Section 4.8: how the "no-show risk" shown on the dashboard and on each class roster is produced — trained on real attendance history, compared across algorithms, and measured, so it can be checked rather than taken on faith.</p>
+
+<div class="card-panel">
+  <h2>Training data</h2>
+  <p>{{ trained.note }}</p>
+  {% if trained.model is none %}
+    <p class="muted">Needs at least {{ min_samples }} marked bookings (a mix of attended and no-show) before any model can be trained. Mark attendance on a few classes from a roster page, then reload this page.</p>
+  {% endif %}
+</div>
+
+{% if trained.model is not none %}
+<div class="card-panel">
+  <h2>Features ({{ feature_names|length }})</h2>
+  <p class="muted">Built only from data already in GymFlow. History-based features are computed leave-one-out, so a booking's own outcome never leaks into its own features.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Feature</th><th>Meaning</th></tr>
+    {% for name in feature_names %}<tr><td><code>{{ name }}</code></td><td>{{ feature_descriptions[name] }}</td></tr>{% endfor %}
+  </table></div>
+</div>
+
+{% if trained.comparison %}
+{% set chosen = trained.comparison|selectattr('name', 'equalto', trained.model_name)|first %}
+<div class="kpi-grid" style="margin-bottom:1rem">
+  <div class="kpi"><span class="muted">Chosen model</span><strong>{{ trained.model_name }}</strong></div>
+  <div class="kpi"><span class="muted">F1 (held-out)</span><strong>{{ (chosen.f1 * 100)|round|int }}%</strong></div>
+  <div class="kpi"><span class="muted">ROC-AUC</span><strong>{{ '%.2f'|format(chosen.roc_auc) if chosen.roc_auc is not none else '—' }}</strong></div>
+  <div class="kpi"><span class="muted">Accuracy vs baseline</span><strong>{{ (chosen.accuracy * 100)|round|int }}% <small class="muted">vs {{ (trained.baseline_accuracy * 100)|round|int }}%</small></strong></div>
+</div>
+
+<div class="card-panel">
+  <h2>Algorithm comparison</h2>
+  <p class="muted">Three model families are trained on the same stratified 75% split and scored on the same held-out 25%. The best held-out F1 (tie-broken by accuracy) wins and is refitted on all data for live predictions. Cross-validated F1 (stratified k-fold on all rows) shows how stable each score is.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Algorithm</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>ROC-AUC</th><th>CV F1 (mean ± sd)</th></tr>
+    {% for c in trained.comparison %}
+    <tr {% if c.name == trained.model_name %}class="chosen-row"{% endif %}>
+      <td>{{ c.name }}{% if c.name == trained.model_name %} <span class="badge success">chosen</span>{% endif %}</td>
+      <td>{{ (c.accuracy * 100)|round|int }}%</td>
+      <td>{{ (c.precision * 100)|round|int }}%</td>
+      <td>{{ (c.recall * 100)|round|int }}%</td>
+      <td>{{ (c.f1 * 100)|round|int }}%</td>
+      <td>{{ '%.2f'|format(c.roc_auc) if c.roc_auc is not none else '—' }}</td>
+      <td>{% if c.cv_f1_mean is not none %}{{ (c.cv_f1_mean * 100)|round|int }}% ± {{ (c.cv_f1_std * 100)|round|int }} <span class="muted">({{ c.cv_folds }}-fold)</span>{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+    <tr class="muted"><td>Baseline: always predict the most common outcome</td><td>{{ (trained.baseline_accuracy * 100)|round|int }}%</td><td colspan="5">a useful model must beat this</td></tr>
+  </table></div>
+  <p class="muted" style="margin-top:10px;">Precision: of the bookings flagged as likely no-shows, how many were. Recall: of the real no-shows, how many were caught. F1 balances both, which matters because attended and no-show bookings are not balanced. ROC-AUC measures how well the predicted probabilities rank no-shows above attenders (0.5 = random, 1.0 = perfect).</p>
+</div>
+
+<div class="insights-grid">
+  <div class="card-panel">
+    <h2>Confusion matrix <span class="muted" style="font-size:.85rem;font-weight:400">({{ trained.model_name }}, held-out)</span></h2>
+    {% set cm = trained.confusion %}
+    <table class="confusion">
+      <tr><th></th><th>Predicted attend</th><th>Predicted no-show</th></tr>
+      <tr><th>Actually attended</th><td class="cm-good">{{ cm.tn }}</td><td class="cm-bad">{{ cm.fp }}</td></tr>
+      <tr><th>Actually no-show</th><td class="cm-bad">{{ cm.fn }}</td><td class="cm-good">{{ cm.tp }}</td></tr>
+    </table>
+    <p class="muted">Green = correct predictions. False alarms (top right) cost little; missed no-shows (bottom left) mean an empty seat.</p>
+  </div>
+
+  <div class="card-panel">
+    <h2>ROC curve</h2>
+    {% if trained.roc %}
+    <svg viewBox="0 0 220 220" class="chart" role="img" aria-label="ROC curve, area {{ '%.2f'|format(chosen.roc_auc or 0) }}">
+      <rect x="30" y="10" width="180" height="180" class="chart-frame"/>
+      <line x1="30" y1="190" x2="210" y2="10" class="chart-diagonal"/>
+      <polyline class="chart-line" points="{% for fpr, tpr in trained.roc %}{{ 30 + fpr * 180 }},{{ 190 - tpr * 180 }} {% endfor %}"/>
+      <text x="120" y="210" class="chart-label" text-anchor="middle">false positive rate</text>
+      <text x="12" y="100" class="chart-label" text-anchor="middle" transform="rotate(-90 12 100)">true positive rate</text>
+      <text x="200" y="182" class="chart-label" text-anchor="end">AUC {{ '%.2f'|format(chosen.roc_auc or 0) }}</text>
+    </svg>
+    <p class="muted">The further the curve bends toward the top-left, the better; the dashed line is random guessing.</p>
+    {% else %}<p class="muted">Not enough held-out examples to draw a curve.</p>{% endif %}
+  </div>
+</div>
+
+<div class="card-panel">
+  <h2>What drives the prediction</h2>
+  <p class="muted">Permutation importance: how much accuracy drops when one feature is randomly shuffled (10 repeats). Bigger bar = the model relies on it more.</p>
+  {% set top = (trained.importances|map(attribute='importance')|max) or 1 %}
+  <div class="importance-list">
+    {% for row in trained.importances %}
+      <div class="importance-row">
+        <code>{{ row.name }}</code>
+        <div class="importance-track"><div class="importance-fill" style="width: {{ [0, (row.importance / (top if top > 0 else 1) * 100)]|max|round(1) }}%"></div></div>
+        <span>{{ '%.3f'|format(row.importance) }} <span class="muted">± {{ '%.3f'|format(row.std) }}</span></span>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="card-panel">
+  <h2>Algorithm comparison</h2>
+  <p class="muted">Not enough marked bookings yet for a meaningful held-out comparison (currently using Logistic Regression by default). Once there are at least 12 marked bookings with both outcomes, this page compares Logistic Regression, Random Forest and Gradient Boosting with cross-validation, ROC-AUC, a confusion matrix and feature importance.</p>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

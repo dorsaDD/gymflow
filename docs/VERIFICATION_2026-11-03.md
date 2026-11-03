@@ -1,37 +1,35 @@
-# Import verification — 3 November 2026
+# Verification — GymFlow, 3 November 2026
 
-Source: `GymFlow-loyalty-policy-engine-fixed.zip`, with application code and existing tests unchanged. This record is a point-in-time local verification, not CI or production certification.
+Source commit: `251c984c1bfdd2aa4021a8296a5e79e7d6252885` (application under `gymflow-app_1/`). This record concerns the newly uploaded source, not the earlier ZIP. Application code was not changed.
 
-## Environment
+Environment: Linux, Python 3.12.14; isolated environment with `requirements.txt` installed. Direct pins: Flask 3.0.3, Flask-SQLAlchemy 3.1.1, Werkzeug 3.0.4, python-dotenv 1.0.1, scikit-learn 1.7.2, openai 1.54.4, httpx 0.27.2. Resolved SQLAlchemy 2.1.6. Transitive versions are not fully locked.
 
-Linux, Python 3.12.14, isolated virtual environment. Installed `requirements.txt` successfully. Direct pinned dependencies: Flask 3.0.3, Flask-SQLAlchemy 3.1.1, Werkzeug 3.0.4, python-dotenv 1.0.1, scikit-learn 1.7.2, openai 1.54.4, httpx 0.27.2. Resolved SQLAlchemy: 2.1.6. Transitive dependencies are not locked by the source requirements.
+## Executed source scripts
 
-## Existing scripts
-
-Ran scripts from the project root with that root on `PYTHONPATH` (the README's `python -m` commands also provide this import context). All five scripts exited 0. The first four use the project's ORM substitute and/or fake services; they must not be described as a full real-database integration suite.
+Each script ran from the application root with that root on `PYTHONPATH`; all exited 0.
 
 ### test_smoke
 
 ```text
-288 checks run, 0 failed.
+289 checks run, 0 failed.
 ```
 
 ### test_unit
 
 ```text
-44 checks run, 0 failed.
+55 checks run, 0 failed.
 ```
 
 ### test_loyalty
 
 ```text
-40 checks run, 0 failed.
+68 checks run, 0 failed.
 ```
 
-### test_ai_provider
+### test_loyalty_e2e
 
 ```text
-9/9 checks passed; no live API request made.
+68 checks run, 0 failed.
 ```
 
 ### test_loyalty_concurrency
@@ -41,54 +39,21 @@ outcomes=['redeemed', 'rejected']; successful=1; redemptions=1; balance=20
 CONCURRENT_REDEMPTION_CHECK PASS
 ```
 
-## Real SQLite setup and page checks
+The first three scripts use an in-memory ORM shim. The E2E script uses real SQLite and a synthetic old-schema fixture, driving admin/member operations, rule validation, tier perks, booking, invoice discounts/refunds, permissions, offline assistant and CSRF through Flask's test client. It is not a browser test. The fixture removes selected newer columns; it does not remove both `photo_filename` and `attended`, so recovery of those historical failures is not directly established by its passing result.
 
-Set `GYMFLOW_DATABASE_URL` to an absolute SQLite file outside the source tree. Ran `python seed_demo_data.py` twice against that same fresh database; both exited 0. Created authenticated Flask test-client sessions for the seeded admin and three demo members. This checks application responses, not browser appearance or the real login journey.
+## Additional real-SQLite quota probe
+
+Created a fresh disposable SQLite app, two member accounts with 10 points each, and one active fixed-discount reward costing 1 point with `max_redemptions=1`. Redeemed sequentially for each member; rolled back the rejected operation; counted all reward redemptions.
 
 ```text
-TIERS [('Bronze', 0), ('Silver', 500), ('Gold', 1200)]
-PAGE admin@gymflow.local /members/dashboard 200
-PAGE admin@gymflow.local /admin/loyalty/ 200
-PAGE mona@example.com /members/dashboard 200
-PAGE mona@example.com /loyalty/ 200
-PAGE mona@example.com /billing/ 200
-TIER mona@example.com Silver 400 650
-PAGE leo@example.com /members/dashboard 200
-PAGE leo@example.com /loyalty/ 200
-PAGE leo@example.com /billing/ 200
-TIER leo@example.com Gold 1250 1250
-PAGE sara@example.com /members/dashboard 200
-PAGE sara@example.com /loyalty/ 200
-PAGE sara@example.com /billing/ 200
-TIER sara@example.com Bronze 120 120
-HEALTH 200
-CAP_REDEMPTION mona@example.com accepted
-CAP_REDEMPTION leo@example.com accepted
-GLOBAL_CAP_RESULT 2 redemptions for limit=1; expected <=1
+GLOBAL_CAP ['accepted', 'rejected'] redemptions= 1
+CURRENT_SOURCE_GLOBAL_CAP PASS
 ```
 
-The `GLOBAL_CAP_RESULT` line above is a **failed business invariant**, even though the exploratory script itself exited 0. The expected total is at most one redemption, not two.
+Expected and observed: one accepted, one rejected, one redemption total. `redeem_reward()` now counts non-reversed uses across all accounts for the total limit. The prior archive's per-account/global-cap bug is not a known current failure. This probe does not establish every possible cross-account concurrent quota behavior.
 
-## Confirmed defect: cross-member global redemption quota
+## Boundaries
 
-`gymflow/loyalty_engine.py:redeem_reward()` creates `existing` by filtering `RewardRedemption` on both `account_id` and `reward_id`. The subsequent `max_redemptions` comparison therefore counts only the current account's redemptions. The policy-grant path uses a different query; this finding concerns manual member redemption.
+No source fixes were made. No real customer database was used. No browser screenshot/visual validation, live AI request, payment gateway, SMTP delivery, Docker startup/failover, seed-script execution or load test was performed. Those outcomes are **نیازمند بررسی**. No proof of full FR-19/NFR-5 acceptance or all coursework requirements was available.
 
-Reproduction on disposable demo data:
-
-1. Create an active invoice reward with type `fixed_discount`, value 1, point cost 1 and `max_redemptions=1`.
-2. Use two different funded members (the seeded Mona and Leo).
-3. Call `redeem_reward(member, reward)` once for each member.
-4. Count `RewardRedemption` rows for that reward across all accounts.
-5. Observed: both accepted, count 2. Expected: second rejected, count 1.
-
-This defect is documented, not repaired by the import. The passing existing concurrency test instead verifies that two concurrent redemptions cannot overspend one wallet.
-
-## Other verification boundaries
-
-- All 39 imported Python files passed AST syntax parsing.
-- No live AI, SMTP or payment service was called.
-- No personal/legacy database was available; migration of the owner's old database remains **نیازمند بررسی**.
-- No browser visual check, Docker run, load test or PWA installation was performed: **نیازمند بررسی**.
-- No current acceptance evidence establishes the historical FR-19/NFR-5 labels: **نیازمند بررسی**.
-- Source scanning found no obvious private-key or API-token patterns in the selected source. This is not a comprehensive secret/security audit.
-- Omitted from public import: `outputs/` environment/screenshots and two `.docx` reports. Runtime databases, uploads, caches and virtual environments are excluded.
+The uploaded application source is preserved; this change adds only a root README and this verification record. Older source-import results are superseded by this commit-specific review.

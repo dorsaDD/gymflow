@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Member Segments — GymFlow{% endblock %}
+{% block content %}
+<div class="detail-header">
+  <div><p class="eyebrow">MACHINE LEARNING · UNSUPERVISED</p><h1>Member segments</h1></div>
+  <div class="actions-row">
+    <a class="btn secondary" href="{{ url_for('classes.model_insights') }}">No-show model</a>
+    <a class="btn secondary" href="{{ url_for('members.dashboard') }}">Back to dashboard</a>
+  </div>
+</div>
+<p class="muted">Members are grouped by how they actually use the gym with K-Means clustering on an RFM model (Recency, Frequency, Monetary) plus tenure and reliability. The number of groups is chosen automatically by the silhouette score. Administrators can target offers at a segment with the rule fact <code>member.segment</code>, for example a win-back offer for "At risk" members.</p>
+
+<div class="card-panel"><h2>Model</h2><p>{{ result.note }}</p></div>
+
+{% if result.ok %}
+<div class="kpi-grid" style="margin-bottom:1rem">
+  {% for seg in result.segments %}
+    <div class="kpi seg-kpi seg-{{ seg.css }}"><span class="muted">{{ seg.name }}</span><strong>{{ seg.size }}</strong></div>
+  {% endfor %}
+</div>
+
+<div class="insights-grid">
+  <div class="card-panel">
+    <h2>Members on a 2-D map (PCA)</h2>
+    <svg viewBox="0 0 320 240" class="chart" role="img" aria-label="Scatter plot of members coloured by segment">
+      <rect x="10" y="10" width="300" height="220" class="chart-frame"/>
+      {% for m in result.members %}
+        <circle cx="{{ 25 + m.px * 270 }}" cy="{{ 218 - m.py * 170 }}" r="7" class="seg-dot seg-{{ m.css }}"><title>{{ m.user.full_name }} — {{ m.segment }}</title></circle>
+        <text x="{{ 25 + m.px * 270 }}" y="{{ 206 - m.py * 170 }}" class="chart-label" text-anchor="middle">{{ m.user.name }}</text>
+      {% endfor %}
+    </svg>
+    <p class="muted">Each dot is a member; the 5 features are compressed into 2 axes with PCA ({{ (result.pca_explained * 100)|round|int }}% of the variation kept). Close dots behave alike.</p>
+    <div class="seg-legend">{% for seg in result.segments %}<span><i class="seg-swatch seg-{{ seg.css }}"></i>{{ seg.name }}</span>{% endfor %}</div>
+  </div>
+
+  <div class="card-panel">
+    <h2>Choosing the number of groups</h2>
+    {% set best = result.k_scores|map(attribute=1)|max %}
+    <svg viewBox="0 0 320 200" class="chart" role="img" aria-label="Silhouette score for each k">
+      {% for k, score, inertia in result.k_scores %}
+        {% set h = [score, 0]|max * 150 %}
+        <rect x="{{ 30 + loop.index0 * 70 }}" y="{{ 170 - h }}" width="44" height="{{ h }}" class="{{ 'bar-best' if k == result.k else 'bar' }}"/>
+        <text x="{{ 52 + loop.index0 * 70 }}" y="188" class="chart-label" text-anchor="middle">k={{ k }}</text>
+        <text x="{{ 52 + loop.index0 * 70 }}" y="{{ 164 - h }}" class="chart-label" text-anchor="middle">{{ '%.2f'|format(score) }}</text>
+      {% endfor %}
+    </svg>
+    <p class="muted">Silhouette score per k (higher = clearer, better-separated groups). k={{ result.k }} is used.</p>
+  </div>
+</div>
+
+<div class="card-panel">
+  <h2>Segment profiles</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Segment</th><th>Members</th><th>Days since last class</th><th>Classes (60 days)</th><th>Paid (90 days)</th><th>Tenure (days)</th><th>Reliability</th></tr>
+    {% for seg in result.segments %}
+    <tr>
+      <td><span class="seg-swatch seg-{{ seg.css }}"></span> <strong>{{ seg.name }}</strong><div class="muted">{{ seg.description }}</div></td>
+      <td>{% for m in seg.members %}<a href="{{ url_for('members.view_card', card_id=m.user.card.id) }}">{{ m.user.full_name }}</a>{{ ', ' if not loop.last }}{% endfor %}</td>
+      <td>{{ seg.means.recency_days }}</td>
+      <td>{{ seg.means.frequency_60d }}</td>
+      <td>${{ '%.0f'|format(seg.means.monetary_90d) }}</td>
+      <td>{{ seg.means.tenure_days }}</td>
+      <td>{{ (seg.means.reliability * 100)|round|int }}%</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  <p class="muted">Group names come from each cluster's average values with fixed rules (e.g. joined under 45 days ago → New members; 21+ days since last class or under 50% reliability → At risk; 12+ classes in 60 days → Champions).</p>
+</div>
+{% endif %}
+{% endblock %}
